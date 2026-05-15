@@ -26,7 +26,9 @@ function getCategories() {
 
 // Helper to get a random text from a category
 function getRandomTextFromCategory(category) {
-    const categoryDir = path.join(DATA_DIR, category);
+    if (typeof category !== 'string') return null;
+    const safeCategory = path.basename(category);
+    const categoryDir = path.join(DATA_DIR, safeCategory);
     if (!fs.existsSync(categoryDir)) return null;
     
     const files = fs.readdirSync(categoryDir).filter(file => file.endsWith('.txt'));
@@ -79,18 +81,26 @@ io.on('connection', (socket) => {
         }
 
         socket.on('chooseTheme', (theme) => {
+            if (typeof theme !== 'string') return;
+            const room = rooms[roomId];
+            if (!room || room.gameState !== 'waiting') return;
+
             const player = room.players.find(p => p.id === socket.id);
             if (player && player.role === 'P1') {
-                const randomText = getRandomTextFromCategory(theme);
+                const safeTheme = path.basename(theme);
+                const randomText = getRandomTextFromCategory(safeTheme);
                 if (randomText) {
-                    room.theme = theme;
+                    room.theme = safeTheme;
                     room.text = randomText;
-                    io.to(roomId).emit('themeUpdated', { theme, text: room.text });
+                    io.to(roomId).emit('themeUpdated', { theme: safeTheme, text: room.text });
                 }
             }
         });
 
         socket.on('setReady', () => {
+            const room = rooms[roomId];
+            if (!room || room.gameState !== 'waiting') return;
+
             const player = room.players.find(p => p.id === socket.id);
             if (player && room.text) { // Ensure theme is chosen
                 player.ready = true;
@@ -103,6 +113,9 @@ io.on('connection', (socket) => {
         });
 
         socket.on('playSolo', () => {
+            const room = rooms[roomId];
+            if (!room || room.gameState !== 'waiting') return;
+
             const player = room.players.find(p => p.id === socket.id);
             if (player && room.text && room.players.length === 1) {
                 player.ready = true;
@@ -112,6 +125,9 @@ io.on('connection', (socket) => {
         });
 
         socket.on('playAgain', () => {
+            const room = rooms[roomId];
+            if (!room || room.gameState !== 'finished') return;
+
             room.gameState = 'waiting';
             room.theme = null;
             room.text = null;
@@ -132,12 +148,23 @@ io.on('connection', (socket) => {
         });
 
         socket.on('updateProgress', (data) => {
+            if (!data || typeof data !== 'object') return;
+            const room = rooms[roomId];
+            if (!room || room.gameState !== 'playing') return;
+
             const player = room.players.find(p => p.id === socket.id);
             if (player) {
-                player.progress = data.progress;
-                player.wpm = data.wpm;
-                player.accuracy = data.accuracy;
-                player.currentWordIndex = data.currentWordIndex;
+                const progress = Number(data.progress) || 0;
+                const wpm = Number(data.wpm) || 0;
+                const accuracy = Number(data.accuracy) || 0;
+                const currentWordIndex = Number(data.currentWordIndex) || 0;
+
+                if (wpm < 0 || wpm > 300 || progress < 0 || progress > 100 || accuracy < 0 || accuracy > 100) return;
+
+                player.progress = progress;
+                player.wpm = wpm;
+                player.accuracy = accuracy;
+                player.currentWordIndex = currentWordIndex;
                 socket.to(roomId).emit('opponentUpdate', player);
             }
         });
