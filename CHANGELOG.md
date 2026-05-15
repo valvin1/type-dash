@@ -2,6 +2,13 @@
 
 Toutes les modifications notables de ce projet seront documentées dans ce fichier.
 
+## [0.7.0] - 2026-05-15
+### Ajouté
+- Externalisation des textes de jeu vers le système de fichiers (`data/`).
+- Création d'un dataset de 60 fichiers (10 par catégorie).
+- Chargement dynamique des thématiques basé sur la structure des dossiers.
+- Sélection aléatoire du fichier texte lors du choix d'une thématique.
+
 ## [0.6.0] - 2026-05-15
 ### Ajouté
 - Calcul du score en temps réel.
