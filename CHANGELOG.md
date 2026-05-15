@@ -2,6 +2,13 @@
 
 Toutes les modifications notables de ce projet seront documentées dans ce fichier.
 
+## [0.8.0] - 2026-05-15
+### Ajouté
+- Mode "Jouer en solo" (Entraînement) accessible quand un joueur est seul dans un salon.
+- Mémorisation locale (LocalStorage) et affichage du meilleur score personnel en mode solo.
+### Modifié
+- Allongement des textes à environ 110-140 mots pour éviter qu'ils ne soient trop courts.
+
 ## [0.7.0] - 2026-05-15
 ### Ajouté
 - Externalisation des textes de jeu vers le système de fichiers (`data/`).

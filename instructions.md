@@ -45,3 +45,14 @@ attention, le premier utilisateur à rejoindre est P1, le second est P2. C'est P
 # v0.6
 
 Le score est calculé en temps réel et le joueur avec le meilleur score est affiché en haut. Quand le joueur adverse nous dépasse, un son est joué pour le signaler.
+
+# v0.7
+
+le texte à taper est actuellement dans le fichier server.js. il doit être mis dans un répertoire data/<catégorie>/<nom_du_fichier>
+il faut créé une dizaine de fichiers par catégorie.
+les fichiers sont sélectionnés de manière aléatoire une fois la catégorie choisie.
+
+# v0.8
+
+si un utilisateur se trouve seul dans une salle, il peut choisir de jouer seul. dans ce cas, on lance le compte à rebours et le jeu comme en duel. A la fin des 60 secondes, on calcule le score et on affiche les résultats.
+si l'utilisateur rejoue tout seul, on mémorise son meilleur score. si à la fin de la partie, le joueur a battu son record, on affiche un message pour le signaler.

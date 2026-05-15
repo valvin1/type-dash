@@ -10,6 +10,7 @@ const screens = {
 
 const startBtn = document.getElementById('start-game-btn');
 const readyBtn = document.getElementById('ready-btn');
+const soloBtn = document.getElementById('solo-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
 const copyLinkBtn = document.getElementById('copy-link');
 const roomIdDisplay = document.querySelector('#room-id-display span');
@@ -88,9 +89,11 @@ socket.on('roomData', (data) => {
         selectedThemeDisplay.classList.remove('hidden');
         document.getElementById('active-theme-name').textContent = data.currentTheme;
         readyBtn.classList.remove('hidden');
+        if (data.players.length === 1) soloBtn.classList.remove('hidden');
     } else {
         selectedThemeDisplay.classList.add('hidden');
         readyBtn.classList.add('hidden');
+        if (soloBtn) soloBtn.classList.add('hidden');
     }
 
     document.getElementById('room-info').classList.remove('hidden');
@@ -111,6 +114,10 @@ socket.on('themeUpdated', (data) => {
     });
 
     readyBtn.classList.remove('hidden');
+    const player2 = document.getElementById('player-2').querySelector('.name').textContent !== "Adversaire";
+    if (player2) {
+        soloBtn.classList.remove('hidden');
+    }
 });
 
 function renderThemeButtons(themes, currentTheme) {
@@ -176,13 +183,27 @@ socket.on('gameFinished', (players) => {
     const p2 = players.find(p => p.id !== socket.id);
 
     displayResults('p1', p1);
-    if (p2) displayResults('p2', p2);
     
     const p1Score = calculateScore(p1);
     const p2Score = p2 ? calculateScore(p2) : 0;
     
-    document.getElementById('result-title').textContent = 
-        (p1Score >= p2Score) ? "Victoire !" : "Défaite...";
+    if (p2) {
+        displayResults('p2', p2);
+        document.querySelector('.result-card.opponent').classList.remove('hidden');
+        document.getElementById('result-title').textContent = 
+            (p1Score >= p2Score) ? "Victoire !" : "Défaite...";
+    } else {
+        document.querySelector('.result-card.opponent').classList.add('hidden');
+        
+        let bestScore = parseInt(localStorage.getItem('bestSoloScore') || '0');
+        
+        if (p1Score > bestScore) {
+            document.getElementById('result-title').textContent = `Nouveau Record ! (${p1Score} pts)`;
+            localStorage.setItem('bestSoloScore', p1Score.toString());
+        } else {
+            document.getElementById('result-title').textContent = `Partie terminée. (Record: ${bestScore} pts)`;
+        }
+    }
 });
 
 // UI Actions
@@ -198,6 +219,16 @@ readyBtn.addEventListener('click', () => {
     }
     socket.emit('setReady');
     readyBtn.classList.add('hidden');
+    soloBtn.classList.add('hidden');
+});
+
+soloBtn.addEventListener('click', () => {
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+    socket.emit('playSolo');
+    readyBtn.classList.add('hidden');
+    soloBtn.classList.add('hidden');
 });
 
 copyLinkBtn.addEventListener('click', () => {
@@ -309,12 +340,23 @@ function updatePlayerList(players) {
         p2Slot.querySelector('.avatar').textContent = "P2";
         p2Slot.querySelector('.name').textContent = "Adversaire";
         p2Slot.querySelector('.status').textContent = other.ready ? "Prêt" : "Pas prêt";
-        readyBtn.classList.remove('hidden');
+        if (targetText) readyBtn.classList.remove('hidden');
+        soloBtn.classList.add('hidden');
     } else {
         p2Slot.querySelector('.avatar').textContent = "?";
         p2Slot.querySelector('.name').textContent = "En attente...";
         p2Slot.querySelector('.status').textContent = "";
+        if (!targetText) {
+            readyBtn.classList.add('hidden');
+            soloBtn.classList.add('hidden');
+        } else {
+            soloBtn.classList.remove('hidden');
+        }
+    }
+
+    if (me && me.ready) {
         readyBtn.classList.add('hidden');
+        soloBtn.classList.add('hidden');
     }
 }
 

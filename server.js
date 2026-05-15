@@ -102,6 +102,15 @@ io.on('connection', (socket) => {
             }
         });
 
+        socket.on('playSolo', () => {
+            const player = room.players.find(p => p.id === socket.id);
+            if (player && room.text && room.players.length === 1) {
+                player.ready = true;
+                io.to(roomId).emit('playerReady', room.players);
+                startCountdown(roomId);
+            }
+        });
+
         socket.on('playAgain', () => {
             room.gameState = 'waiting';
             room.theme = null;
