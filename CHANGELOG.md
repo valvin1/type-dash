@@ -1,3 +1,17 @@
+# 1.0.0 (2026-05-18)
+
+
+### Bug Fixes
+
+* resolve security audit vulnerabilities ([2aa17a5](https://gitlab.com/kiabi-com/bekom/sandbox/vincent-test-antigravity/commit/2aa17a5c2515b3e7c3c1a1e0b1594699e677bd29))
+
+
+### Features
+
+* externalize texts to filesystem and expand dataset v0.7 ([1694499](https://gitlab.com/kiabi-com/bekom/sandbox/vincent-test-antigravity/commit/1694499175aa11dbc04802371e628cb7a2c8e488))
+* implement real-time multiplayer typing battle v0.6 ([2eee44b](https://gitlab.com/kiabi-com/bekom/sandbox/vincent-test-antigravity/commit/2eee44b91880d3d606e2e425a2feb63d24717cf4))
+* implement v0.8 solo mode and longer texts ([c6901b8](https://gitlab.com/kiabi-com/bekom/sandbox/vincent-test-antigravity/commit/c6901b877bf1882f5149ef5d01b9f2c75aff97d7))
+
 # Changelog
 
 Toutes les modifications notables de ce projet seront documentées dans ce fichier.
