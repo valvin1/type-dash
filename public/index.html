@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TypeDash - Battle de Dactylo en Temps Réel</title>
+    <meta name="description" content="Affrontez vos amis dans un duel de dactylographie intense. Qui sera le plus rapide ?">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1 class="logo">Type<span>Dash</span></h1>
+            <div id="room-info" class="hidden">
+                <span id="room-id-display">Salon: <span>-</span></span>
+                <button id="copy-link" class="btn-secondary">Copier le lien</button>
+            </div>
+        </header>
+
+        <main>
+            <!-- Lobby Screen -->
+            <section id="lobby" class="screen">
+                <div class="glass-card">
+                    <h2>Prêt pour le duel ?</h2>
+                    <p>Créez une partie ou rejoignez-en une via un lien.</p>
+                    <div class="actions">
+                        <button id="start-game-btn" class="btn-primary">Créer une partie</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Waiting Screen -->
+            <section id="waiting" class="screen hidden">
+                <div class="glass-card">
+                    <h2 id="waiting-status">En attente d'un adversaire...</h2>
+                    
+                    <div id="theme-selection" class="hidden">
+                        <h3>Choisissez une thématique :</h3>
+                        <div class="theme-buttons">
+                            <!-- Theme buttons will be injected here -->
+                        </div>
+                    </div>
+
+                    <div id="selected-theme-display" class="hidden">
+                        Thématique : <span id="active-theme-name">...</span>
+                    </div>
+
+                    <div class="player-slots">
+                        <div id="player-1" class="player-slot">
+                            <div class="avatar">P1</div>
+                            <span class="name">Vous</span>
+                            <span class="status">Non prêt</span>
+                        </div>
+                        <div class="vs">VS</div>
+                        <div id="player-2" class="player-slot">
+                            <div class="avatar">?</div>
+                            <span class="name">En attente...</span>
+                            <span class="status"></span>
+                        </div>
+                    </div>
+                    <div class="actions" style="display:flex;gap:1rem;justify-content:center;">
+                        <button id="ready-btn" class="btn-primary hidden">Je suis prêt !</button>
+                        <button id="solo-btn" class="btn-secondary hidden">Jouer en solo</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Game Screen -->
+            <section id="game" class="screen hidden">
+                <div class="game-header">
+                    <div class="timer-container">
+                        <span id="timer">60</span>s
+                    </div>
+                    <div class="stats-bar">
+                        <div id="leader-badge" class="badge">Égalité</div>
+                        <div class="stat">WPM: <span id="current-wpm">0</span></div>
+                        <div class="stat">Précision: <span id="current-accuracy">0</span>%</div>
+                    </div>
+                </div>
+
+                <div id="countdown-overlay" class="hidden">
+                    <span id="countdown-number">3</span>
+                </div>
+
+                <div class="text-display-container">
+                    <div id="text-display" class="glass-card">
+                        <div id="text-scroller">
+                            <!-- Words will be injected here -->
+                        </div>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-track">
+                            <div id="player-progress" class="progress-bar player"></div>
+                            <div id="opponent-progress" class="progress-bar opponent"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-container">
+                    <textarea id="typing-input" placeholder="Tapez ici..." spellcheck="false" disabled></textarea>
+                </div>
+            </section>
+
+            <!-- Result Screen -->
+            <section id="results" class="screen hidden">
+                <div class="glass-card">
+                    <h2 id="result-title">Résultats</h2>
+                    <div class="results-grid">
+                        <div class="result-card player">
+                            <h3>Vous</h3>
+                            <div class="big-stat"><span id="res-p1-score">0</span> pts</div>
+                            <div class="sub-stats">
+                                <span>WPM: <span id="res-p1-wpm">0</span></span>
+                                <span>Précision: <span id="res-p1-acc">0</span>%</span>
+                            </div>
+                        </div>
+                        <div class="result-card opponent">
+                            <h3>Adversaire</h3>
+                            <div class="big-stat"><span id="res-p2-score">0</span> pts</div>
+                            <div class="sub-stats">
+                                <span>WPM: <span id="res-p2-wpm">0</span></span>
+                                <span>Précision: <span id="res-p2-acc">0</span>%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="play-again-btn" class="btn-primary">Rejouer</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2026 TypeDash. Made with &hearts; for speed.</p>
+        </footer>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
