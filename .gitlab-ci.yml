@@ -1,6 +1,7 @@
 stages:
   - test
   - build
+  - release
 
 variables:
   DOCKER_TLS_CERTDIR: "/certs"
@@ -43,3 +44,21 @@ build-docker:
       fi
   rules:
     - if: $CI_COMMIT_BRANCH
+
+# Stage 3: Automated Semantic Versioning and GitLab Release (Only on main pushes/merges)
+release:
+  stage: release
+  image: node:24-alpine
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+  before_script:
+    - apk add --no-cache git
+    - npm ci --cache .npm --prefer-offline
+  script:
+    - npx semantic-release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
