@@ -48,21 +48,12 @@
                         Thématique : <span id="active-theme-name">...</span>
                     </div>
 
-                    <div class="player-slots">
-                        <div id="player-1" class="player-slot">
-                            <div class="avatar">P1</div>
-                            <span class="name">Vous</span>
-                            <span class="status">Non prêt</span>
-                        </div>
-                        <div class="vs">VS</div>
-                        <div id="player-2" class="player-slot">
-                            <div class="avatar">?</div>
-                            <span class="name">En attente...</span>
-                            <span class="status"></span>
-                        </div>
+                    <div id="player-slots" class="player-slots-grid">
+                        <!-- Up to 10 player slots injected here dynamically -->
                     </div>
                     <div class="actions" style="display:flex;gap:1rem;justify-content:center;">
                         <button id="ready-btn" class="btn-primary hidden">Je suis prêt !</button>
+                        <button id="start-game-btn-host" class="btn-primary hidden">Lancer la partie</button>
                         <button id="solo-btn" class="btn-secondary hidden">Jouer en solo</button>
                     </div>
                 </div>
@@ -92,9 +83,8 @@
                         </div>
                     </div>
                     <div class="progress-container">
-                        <div class="progress-track">
-                            <div id="player-progress" class="progress-bar player"></div>
-                            <div id="opponent-progress" class="progress-bar opponent"></div>
+                        <div id="racetrack-lanes" class="racetrack-lanes">
+                            <!-- Horizontal dynamic racetracks for all active players -->
                         </div>
                     </div>
                 </div>
@@ -108,24 +98,30 @@
             <section id="results" class="screen hidden">
                 <div class="glass-card">
                     <h2 id="result-title">Résultats</h2>
-                    <div class="results-grid">
-                        <div class="result-card player">
-                            <h3>Vous</h3>
-                            <div class="big-stat"><span id="res-p1-score">0</span> pts</div>
-                            <div class="sub-stats">
-                                <span>WPM: <span id="res-p1-wpm">0</span></span>
-                                <span>Précision: <span id="res-p1-acc">0</span>%</span>
-                            </div>
-                        </div>
-                        <div class="result-card opponent">
-                            <h3>Adversaire</h3>
-                            <div class="big-stat"><span id="res-p2-score">0</span> pts</div>
-                            <div class="sub-stats">
-                                <span>WPM: <span id="res-p2-wpm">0</span></span>
-                                <span>Précision: <span id="res-p2-acc">0</span>%</span>
-                            </div>
-                        </div>
+                    
+                    <!-- 3D styled podium for top 3 spots -->
+                    <div id="podium-container" class="podium-container">
+                        <!-- Injected dynamically -->
                     </div>
+
+                    <!-- Scrollable table for other participants -->
+                    <div id="standings-table-container" class="standings-table-container hidden">
+                        <table class="standings-table">
+                            <thead>
+                                <tr>
+                                    <th>Rang</th>
+                                    <th>Joueur</th>
+                                    <th>Score</th>
+                                    <th>WPM</th>
+                                    <th>Précision</th>
+                                </tr>
+                            </thead>
+                            <tbody id="standings-tbody">
+                                <!-- Ranks 4-10 dynamic elements -->
+                            </tbody>
+                        </table>
+                    </div>
+
                     <button id="play-again-btn" class="btn-primary">Rejouer</button>
                 </div>
             </section>
