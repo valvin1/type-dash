@@ -42,6 +42,9 @@ io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
     socket.on('joinRoom', (roomId) => {
+        if (typeof roomId !== 'string' || !roomId) {
+            return socket.emit('error', 'Room ID non valide');
+        }
         socket.join(roomId);
         
         if (!rooms[roomId]) {
@@ -56,7 +59,8 @@ io.on('connection', (socket) => {
         const room = rooms[roomId];
         const categories = getCategories();
         
-        if (room.players.length < 2) {
+        if (room.players.length < 10) {
+            const role = room.players.length === 0 ? 'P1' : 'P' + (room.players.length + 1);
             room.players.push({
                 id: socket.id,
                 ready: false,
@@ -64,7 +68,7 @@ io.on('connection', (socket) => {
                 accuracy: 0,
                 progress: 0,
                 currentWordIndex: 0,
-                role: room.players.length === 0 ? 'P1' : 'P2'
+                role: role
             });
             
             socket.emit('roomData', {
@@ -105,8 +109,17 @@ io.on('connection', (socket) => {
             if (player && room.text) { // Ensure theme is chosen
                 player.ready = true;
                 io.to(roomId).emit('playerReady', room.players);
+            }
+        });
 
-                if (room.players.length === 2 && room.players.every(p => p.ready)) {
+        socket.on('startGame', () => {
+            const room = rooms[roomId];
+            if (!room || room.gameState !== 'waiting') return;
+
+            const player = room.players.find(p => p.id === socket.id);
+            if (player && player.role === 'P1') {
+                const readyCount = room.players.filter(p => p.ready).length;
+                if (readyCount >= 2) {
                     startCountdown(roomId);
                 }
             }
@@ -154,12 +167,13 @@ io.on('connection', (socket) => {
 
             const player = room.players.find(p => p.id === socket.id);
             if (player) {
-                const progress = Number(data.progress) || 0;
-                const wpm = Number(data.wpm) || 0;
-                const accuracy = Number(data.accuracy) || 0;
-                const currentWordIndex = Number(data.currentWordIndex) || 0;
+                const progress = Number(data.progress);
+                const wpm = Number(data.wpm);
+                const accuracy = Number(data.accuracy);
+                const currentWordIndex = Number(data.currentWordIndex);
 
-                if (wpm < 0 || wpm > 300 || progress < 0 || progress > 100 || accuracy < 0 || accuracy > 100) return;
+                if (isNaN(progress) || isNaN(wpm) || isNaN(accuracy) || isNaN(currentWordIndex)) return;
+                if (wpm < 0 || wpm > 300 || progress < 0 || progress > 100 || accuracy < 0 || accuracy > 100 || currentWordIndex < 0) return;
 
                 player.progress = progress;
                 player.wpm = wpm;
@@ -170,10 +184,14 @@ io.on('connection', (socket) => {
         });
 
         socket.on('disconnect', () => {
+            const room = rooms[roomId];
+            if (!room) return;
             room.players = room.players.filter(p => p.id !== socket.id);
-            // Re-assign roles if P1 left
+            // Re-assign roles if P1 left, and adjust roles of other players to be sequential
             if (room.players.length > 0) {
-                room.players[0].role = 'P1';
+                room.players.forEach((p, idx) => {
+                    p.role = idx === 0 ? 'P1' : 'P' + (idx + 1);
+                });
             }
             io.to(roomId).emit('playerLeft', room.players);
             if (room.players.length === 0) {
