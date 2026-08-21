@@ -1,93 +1,82 @@
-# vincent-test-antigravity
+# TypeDash
 
+TypeDash is a real-time multiplayer typing game for 2–10 players, with a solo
+mode. A host creates a room, shares its URL, chooses a French text category,
+and starts the race when the players are ready.
 
+## Features
 
-## Getting started
+- Shareable game rooms with automatic host promotion
+- Six French text categories
+- Server-controlled countdown and 60-second game clock
+- Live WPM, accuracy, rankings, and multi-lane progress display
+- Final top-three podium and standings table
+- Solo play and replay support
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+The active OpenSpec change is in
+`openspec/changes/multiplayer-2-to-10-players/`.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Architecture
 
-## Add your files
+The browser client is plain HTML, CSS, and JavaScript served by an Express
+server. Socket.IO carries lobby state, timers, and live progress updates over
+the same origin.
 
-* [Create](https://docs.gitlab.com/user/project/repository/web_editor/#create-a-file) or [upload](https://docs.gitlab.com/user/project/repository/web_editor/#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+Room state is held in the Node.js process. The current version is therefore
+intended to run as one application instance. A restart ends active games, and
+horizontal scaling would require a shared Socket.IO adapter and shared room
+state.
 
+## Run locally
+
+Requirements: Node.js 22–24 and npm.
+
+```sh
+npm ci
+npm start
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/kiabi-com/bekom/sandbox/vincent-test-antigravity.git
-git branch -M main
-git push -uf origin main
+
+Open <http://localhost:3000>. The health endpoint is
+<http://localhost:3000/health>.
+
+Run the integration test suite with:
+
+```sh
+npm test
 ```
 
-## Integrate with your tools
+## Run with Docker
 
-* [Set up project integrations](https://gitlab.com/kiabi-com/bekom/sandbox/vincent-test-antigravity/-/settings/integrations)
+```sh
+docker build -t typedash .
+docker run --rm -p 3000:3000 typedash
+```
 
-## Collaborate with your team
+The production image installs runtime dependencies only, runs as the
+unprivileged `node` user, and includes a health check.
 
-* [Invite team members and collaborators](https://docs.gitlab.com/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/user/project/merge_requests/creating_merge_requests/)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/user/project/issues/managing_issues/#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+## Publish a test deployment on Render
 
-## Test and Deploy
+The repository includes `render.yaml` for a free, single-instance web service
+in Frankfurt. Render supports the WebSocket connection used by Socket.IO.
 
-Use the built-in continuous integration in GitLab.
+1. Push these changes to GitLab and merge them into the repository's default
+   branch.
+2. In Render, create a new Blueprint and connect the GitLab repository.
+3. Select the repository's `render.yaml` and apply the Blueprint.
+4. Wait for the Docker build and `/health` check to pass, then open the assigned
+   `onrender.com` URL.
+5. Create a room and open its copied URL in a second browser or private window.
 
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/topics/autodevops/requirements/)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ci/environments/protected_environments/)
+The free service can sleep after a period without HTTP requests or WebSocket
+messages, so the first visit after inactivity can take longer. It is suitable
+for testing, not a production SLA.
 
-***
+## Current limitations
 
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+- Rooms, results, and solo records are not persisted.
+- Player scores are still calculated in the browser and should not be treated
+  as cheat-resistant competitive results.
+- There are no accounts, matchmaking, moderation, or analytics.
+- The Google Fonts dependency requires Internet access; the app falls back to
+  a local sans-serif or monospace font if it is unavailable.
