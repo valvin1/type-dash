@@ -2,9 +2,13 @@
   "name": "antigravity-test",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "test": "node --check server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=22 <25"
   },
   "keywords": [],
   "author": "",
