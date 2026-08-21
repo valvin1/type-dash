@@ -1,11 +1,15 @@
-## ADDED Requirements
+# lobby-management Specification
 
+## Purpose
+Define multiplayer room capacity, host succession, and the authorization rules that control when a race may start.
+
+## Requirements
 ### Requirement: Room capacity limit of 10
 The system MUST restrict each multiplayer room to a maximum of 10 concurrent players, rejecting any additional connection attempts once the limit is reached.
 
 #### Scenario: Block eleventh player from joining
 - **WHEN** 10 players have already joined room `room-123`
-- **THEN** the server SHALL reject any further connection requests for `room-123` and emit a `'error'` event with message `'Room is full'` to the eleventh player
+- **THEN** the server SHALL reject any further connection requests for `room-123` and emit a `'roomError'` event with message `'Le salon est complet'` to the eleventh player
 
 ### Requirement: Dynamic Host assignment and promotion
 The system MUST designate the first player joining a room as the Host. If the Host disconnects, the system MUST automatically promote the next connected player to the Host role and broadcast the updated player list.

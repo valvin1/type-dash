@@ -24,6 +24,10 @@ function waitFor(socket, event, predicate = () => true, timeoutMs = 2000) {
     });
 }
 
+function wait(timeoutMs) {
+    return new Promise(resolve => setTimeout(resolve, timeoutMs));
+}
+
 async function connectClient(url) {
     const client = createClient(url, {
         autoConnect: false,
@@ -67,6 +71,11 @@ test('health check and two-player game lifecycle', async (t) => {
     guest.emit('joinRoom', 'integration-room');
     await guestRoomData;
 
+    const originalTheme = rooms['integration-room'].theme;
+    guest.emit('chooseTheme', themes.find(theme => theme !== originalTheme));
+    await wait(20);
+    assert.equal(rooms['integration-room'].theme, originalTheme);
+
     const duplicateJoinError = waitFor(host, 'roomError');
     host.emit('joinRoom', 'another-room');
     assert.equal(await duplicateJoinError, 'Vous avez déjà rejoint un salon');
@@ -81,11 +90,25 @@ test('health check and two-player game lifecycle', async (t) => {
     guest.emit('setReady');
     await everyoneReady;
 
+    guest.emit('startGame');
+    await wait(20);
+    assert.equal(rooms['integration-room'].gameState, 'waiting');
+
     const hostStarted = waitFor(host, 'gameStarted');
     const guestStarted = waitFor(guest, 'gameStarted');
     host.emit('startGame');
     await Promise.all([hostStarted, guestStarted]);
     assert.equal(rooms['integration-room'].gameState, 'playing');
+
+    host.emit('updateProgress', null);
+    host.emit('updateProgress', { progress: 'invalid', wpm: 80, accuracy: 100, currentWordIndex: 1 });
+    host.emit('updateProgress', { progress: 50, wpm: 301, accuracy: 100, currentWordIndex: 1 });
+    await wait(20);
+    assert.equal(rooms['integration-room'].players[0].progress, 0);
+
+    host.emit('updateProgress', { progress: 50, wpm: 80, accuracy: 98, currentWordIndex: 1 });
+    await wait(20);
+    assert.equal(rooms['integration-room'].players[0].progress, 50);
 
     const finished = waitFor(host, 'gameFinished');
     const finalPlayers = await finished;
@@ -109,4 +132,27 @@ test('health check and two-player game lifecycle', async (t) => {
     const promotedHostTheme = waitFor(guest, 'themeUpdated');
     guest.emit('chooseTheme', themes[0]);
     assert.equal((await promotedHostTheme).theme, themes[0]);
+});
+
+test('room capacity rejects the eleventh player', async (t) => {
+    const address = await startServer(0, '127.0.0.1');
+    const url = `http://127.0.0.1:${address.port}`;
+    const clients = await Promise.all(Array.from({ length: 11 }, () => connectClient(url)));
+
+    t.after(async () => {
+        clients.forEach(client => client.close());
+        await stopServer();
+    });
+
+    for (const client of clients.slice(0, 10)) {
+        const roomData = waitFor(client, 'roomData');
+        client.emit('joinRoom', 'capacity-room');
+        await roomData;
+    }
+
+    const roomFullError = waitFor(clients[10], 'roomError');
+    clients[10].emit('joinRoom', 'capacity-room');
+
+    assert.equal(await roomFullError, 'Le salon est complet');
+    assert.equal(rooms['capacity-room'].players.length, 10);
 });
