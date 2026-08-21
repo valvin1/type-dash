@@ -107,6 +107,11 @@ p {
     margin-bottom: 2rem;
 }
 
+.error-message {
+    color: var(--error);
+    margin-bottom: 1rem;
+}
+
 .btn-primary {
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: white;

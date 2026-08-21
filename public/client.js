@@ -33,6 +33,8 @@ let startTime = null;
 let gameActive = false;
 let myLastRank = 1;
 let activePlayers = [];
+let availableThemes = [];
+let selectedTheme = null;
 let lastEmitTime = 0;
 const throttleMs = 150;
 
@@ -73,36 +75,38 @@ function init() {
 // Socket Events
 socket.on('roomData', (data) => {
     activePlayers = data.players;
-    updatePlayerList(data.players);
+    availableThemes = data.themes;
+    selectedTheme = data.currentTheme;
+    targetText = data.text || '';
     resetGameState();
     showScreen('waiting');
-    
-    // Theme setup
-    const me = data.players.find(p => p.id === socket.id);
-    const themeSection = document.getElementById('theme-selection');
+
     const selectedThemeDisplay = document.getElementById('selected-theme-display');
-    
-    if (me && me.role === 'P1') {
-        themeSection.classList.remove('hidden');
-        renderThemeButtons(data.themes, data.currentTheme);
-    } else {
-        themeSection.classList.add('hidden');
-    }
 
     if (data.currentTheme) {
-        targetText = data.text;
         setupTextDisplay(targetText);
         selectedThemeDisplay.classList.remove('hidden');
         document.getElementById('active-theme-name').textContent = data.currentTheme;
     } else {
+        words = [];
+        textScroller.innerHTML = '';
         selectedThemeDisplay.classList.add('hidden');
     }
 
+    updatePlayerList(data.players);
     document.getElementById('room-info').classList.remove('hidden');
     roomIdDisplay.textContent = currentRoomId;
 });
 
+socket.on('roomError', (message) => {
+    const errorDisplay = document.getElementById('connection-error');
+    errorDisplay.textContent = message;
+    errorDisplay.classList.remove('hidden');
+    showScreen('lobby');
+});
+
 socket.on('themeUpdated', (data) => {
+    selectedTheme = data.theme;
     targetText = data.text;
     setupTextDisplay(targetText);
     
@@ -342,6 +346,14 @@ function updatePlayerList(players) {
     const slotsContainer = document.getElementById('player-slots');
     slotsContainer.innerHTML = '';
 
+    const themeSection = document.getElementById('theme-selection');
+    if (me?.role === 'P1') {
+        themeSection.classList.remove('hidden');
+        renderThemeButtons(availableThemes, selectedTheme);
+    } else {
+        themeSection.classList.add('hidden');
+    }
+
     // Render up to 10 slots
     for (let i = 0; i < 10; i++) {
         const p = players[i];
@@ -395,8 +407,8 @@ function updatePlayerList(players) {
         
         if (targetText) {
             if (isHost) {
-                readyBtn.classList.add('hidden');
-                startGameBtnHost.classList.remove('hidden');
+                readyBtn.classList.toggle('hidden', me.ready);
+                startGameBtnHost.classList.toggle('hidden', !me.ready);
                 // Enable button only if at least 2 players are ready
                 startGameBtnHost.disabled = readyCount < 2;
                 startGameBtnHost.style.opacity = readyCount < 2 ? '0.5' : '1';
