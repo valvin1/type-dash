@@ -1,12 +1,15 @@
 # TypeDash
 
-TypeDash is a real-time multiplayer typing game for 2–10 players, with a solo
-mode. A host creates a room, shares its URL, chooses a French text category,
-and starts the race when the players are ready.
+TypeDash is a real-time typing game with an explicit Solo mode and configurable
+multiplayer rooms for 2–6 players. A host chooses the room capacity, shares its
+URL, selects a French text category, and starts the race when everyone present
+is ready.
 
 ## Features
 
-- Shareable game rooms with automatic host promotion
+- Initial Solo or Multijoueur mode selection
+- Shareable rooms with a host-selected capacity from 2 to 6 players
+- Unanimous ready checks, automatic host promotion, and Host removal controls
 - Six French text categories
 - Server-controlled countdown and 60-second game clock
 - Live WPM, accuracy, rankings, and multi-lane progress display
@@ -14,7 +17,7 @@ and starts the race when the players are ready.
 - Solo play and replay support
 
 The active OpenSpec change is in
-`openspec/changes/multiplayer-2-to-10-players/`.
+`openspec/changes/add-game-mode-setup/`.
 
 ## Architecture
 
@@ -66,7 +69,8 @@ in Frankfurt. Render supports the WebSocket connection used by Socket.IO.
 3. Select the repository's `render.yaml` and apply the Blueprint.
 4. Wait for the Docker build and `/health` check to pass, then open the assigned
    `onrender.com` URL.
-5. Create a room and open its copied URL in a second browser or private window.
+5. Choose Multijoueur, create a room, and open its copied URL in a second
+   browser or private window.
 
 The free service can sleep after a period without HTTP requests or WebSocket
 messages, so the first visit after inactivity can take longer. It is suitable

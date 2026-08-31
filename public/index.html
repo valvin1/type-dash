@@ -24,11 +24,35 @@
             <!-- Lobby Screen -->
             <section id="lobby" class="screen">
                 <div class="glass-card">
-                    <h2>Prêt pour le duel ?</h2>
-                    <p>Créez une partie ou rejoignez-en une via un lien.</p>
+                    <h2>Choisissez votre mode de jeu</h2>
+                    <p>Entraînez-vous en solo ou défiez jusqu’à cinq adversaires.</p>
                     <p id="connection-error" class="error-message hidden" role="alert"></p>
-                    <div class="actions">
-                        <button id="start-game-btn" class="btn-primary">Créer une partie</button>
+                    <div id="mode-selection" class="mode-selection">
+                        <button id="solo-mode-btn" class="mode-card" type="button">
+                            <span class="mode-icon" aria-hidden="true">⌨️</span>
+                            <strong>Solo</strong>
+                            <span>Jouez immédiatement à votre rythme</span>
+                        </button>
+                        <button id="multiplayer-mode-btn" class="mode-card" type="button">
+                            <span class="mode-icon" aria-hidden="true">🏁</span>
+                            <strong>Multijoueur</strong>
+                            <span>Créez un salon de 2 à 6 joueurs</span>
+                        </button>
+                    </div>
+                    <div id="multiplayer-setup" class="multiplayer-setup hidden">
+                        <label for="player-capacity">Capacité maximale du salon</label>
+                        <select id="player-capacity">
+                            <option value="2" selected>2 joueurs</option>
+                            <option value="3">3 joueurs</option>
+                            <option value="4">4 joueurs</option>
+                            <option value="5">5 joueurs</option>
+                            <option value="6">6 joueurs</option>
+                        </select>
+                        <p>Vous pourrez commencer avant que le salon soit complet dès que tous les joueurs présents seront prêts.</p>
+                        <div class="lobby-actions">
+                            <button id="back-to-modes-btn" class="btn-secondary" type="button">Retour</button>
+                            <button id="create-multiplayer-btn" class="btn-primary" type="button">Créer le salon</button>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -36,7 +60,7 @@
             <!-- Waiting Screen -->
             <section id="waiting" class="screen hidden">
                 <div class="glass-card">
-                    <h2 id="waiting-status">En attente d'un adversaire...</h2>
+                    <h2 id="waiting-status">Préparation de la partie</h2>
                     
                     <div id="theme-selection" class="hidden">
                         <h3>Choisissez une thématique :</h3>
@@ -49,13 +73,16 @@
                         Thématique : <span id="active-theme-name">...</span>
                     </div>
 
-                    <div id="player-slots" class="player-slots-grid">
-                        <!-- Up to 10 player slots injected here dynamically -->
+                    <div id="multiplayer-lobby">
+                        <p id="lobby-readiness-message" class="lobby-readiness-message"></p>
+                        <div id="player-slots" class="player-slots-grid">
+                            <!-- Configured player slots injected here dynamically -->
+                        </div>
                     </div>
-                    <div class="actions" style="display:flex;gap:1rem;justify-content:center;">
+                    <div class="lobby-actions">
                         <button id="ready-btn" class="btn-primary hidden">Je suis prêt !</button>
                         <button id="start-game-btn-host" class="btn-primary hidden">Lancer la partie</button>
-                        <button id="solo-btn" class="btn-secondary hidden">Jouer en solo</button>
+                        <button id="solo-btn" class="btn-primary hidden">Lancer la partie solo</button>
                     </div>
                 </div>
             </section>
@@ -118,7 +145,7 @@
                                 </tr>
                             </thead>
                             <tbody id="standings-tbody">
-                                <!-- Ranks 4-10 dynamic elements -->
+                                <!-- Ranks 4-6 dynamic elements -->
                             </tbody>
                         </table>
                     </div>
