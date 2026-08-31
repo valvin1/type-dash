@@ -8,7 +8,13 @@ const screens = {
     results: document.getElementById('results')
 };
 
-const startBtn = document.getElementById('start-game-btn');
+const soloModeBtn = document.getElementById('solo-mode-btn');
+const multiplayerModeBtn = document.getElementById('multiplayer-mode-btn');
+const multiplayerSetup = document.getElementById('multiplayer-setup');
+const modeSelection = document.getElementById('mode-selection');
+const playerCapacity = document.getElementById('player-capacity');
+const createMultiplayerBtn = document.getElementById('create-multiplayer-btn');
+const backToModesBtn = document.getElementById('back-to-modes-btn');
 const readyBtn = document.getElementById('ready-btn');
 const startGameBtnHost = document.getElementById('start-game-btn-host');
 const soloBtn = document.getElementById('solo-btn');
@@ -23,9 +29,15 @@ const countdownNumber = document.getElementById('countdown-number');
 const wpmDisplay = document.getElementById('current-wpm');
 const accDisplay = document.getElementById('current-accuracy');
 const textScroller = document.getElementById('text-scroller');
+const roomInfo = document.getElementById('room-info');
+const multiplayerLobby = document.getElementById('multiplayer-lobby');
+const waitingStatus = document.getElementById('waiting-status');
+const readinessMessage = document.getElementById('lobby-readiness-message');
 
 // Game State
 let currentRoomId = null;
+let currentMode = null;
+let roomMaxPlayers = 1;
 let targetText = "";
 let words = [];
 let currentWordIndex = 0;
@@ -78,6 +90,8 @@ socket.on('roomData', (data) => {
     availableThemes = data.themes;
     selectedTheme = data.currentTheme;
     targetText = data.text || '';
+    currentMode = data.mode;
+    roomMaxPlayers = data.maxPlayers;
     resetGameState();
     showScreen('waiting');
 
@@ -94,13 +108,22 @@ socket.on('roomData', (data) => {
     }
 
     updatePlayerList(data.players);
-    document.getElementById('room-info').classList.remove('hidden');
-    roomIdDisplay.textContent = currentRoomId;
+    roomInfo.classList.toggle('hidden', currentMode !== 'multiplayer');
+    if (currentMode === 'multiplayer') roomIdDisplay.textContent = currentRoomId;
 });
 
 socket.on('roomError', (message) => {
+    clearRoomContext();
     const errorDisplay = document.getElementById('connection-error');
     errorDisplay.textContent = message;
+    errorDisplay.classList.remove('hidden');
+    showScreen('lobby');
+});
+
+socket.on('removedFromRoom', (message) => {
+    clearRoomContext();
+    const errorDisplay = document.getElementById('connection-error');
+    errorDisplay.textContent = message || 'L’hôte vous a retiré de la partie';
     errorDisplay.classList.remove('hidden');
     showScreen('lobby');
 });
@@ -230,10 +253,23 @@ socket.on('gameFinished', (players) => {
 });
 
 // UI Actions
-startBtn.addEventListener('click', () => {
-    const id = Math.random().toString(36).substring(2, 8);
-    window.history.pushState({}, '', `?room=${id}`);
-    joinRoom(id);
+soloModeBtn.addEventListener('click', () => {
+    createRoom('solo', 1);
+});
+
+multiplayerModeBtn.addEventListener('click', () => {
+    modeSelection.classList.add('hidden');
+    multiplayerSetup.classList.remove('hidden');
+    playerCapacity.focus();
+});
+
+backToModesBtn.addEventListener('click', () => {
+    multiplayerSetup.classList.add('hidden');
+    modeSelection.classList.remove('hidden');
+});
+
+createMultiplayerBtn.addEventListener('click', () => {
+    createRoom('multiplayer', Number(playerCapacity.value));
 });
 
 readyBtn.addEventListener('click', () => {
@@ -336,6 +372,39 @@ function joinRoom(id) {
     socket.emit('joinRoom', id);
 }
 
+function createRoom(mode, maxPlayers) {
+    const randomPart = window.crypto?.randomUUID
+        ? window.crypto.randomUUID().replaceAll('-', '').slice(0, 8)
+        : Math.random().toString(36).substring(2, 10);
+
+    currentRoomId = randomPart;
+    currentMode = mode;
+    roomMaxPlayers = maxPlayers;
+    document.getElementById('connection-error').classList.add('hidden');
+
+    if (mode === 'multiplayer') {
+        window.history.pushState({}, '', `?room=${currentRoomId}`);
+    } else {
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    socket.emit('createRoom', { roomId: currentRoomId, mode, maxPlayers });
+}
+
+function clearRoomContext() {
+    currentRoomId = null;
+    currentMode = null;
+    roomMaxPlayers = 1;
+    activePlayers = [];
+    availableThemes = [];
+    selectedTheme = null;
+    targetText = '';
+    roomInfo.classList.add('hidden');
+    multiplayerSetup.classList.add('hidden');
+    modeSelection.classList.remove('hidden');
+    window.history.replaceState({}, '', window.location.pathname);
+}
+
 function showScreen(screenId) {
     Object.values(screens).forEach(s => s.classList.add('hidden'));
     screens[screenId].classList.remove('hidden');
@@ -354,8 +423,19 @@ function updatePlayerList(players) {
         themeSection.classList.add('hidden');
     }
 
-    // Render up to 10 slots
-    for (let i = 0; i < 10; i++) {
+    if (currentMode === 'solo') {
+        waitingStatus.textContent = 'Partie solo';
+        multiplayerLobby.classList.add('hidden');
+        readyBtn.classList.add('hidden');
+        startGameBtnHost.classList.add('hidden');
+        soloBtn.classList.toggle('hidden', !targetText);
+        return;
+    }
+
+    multiplayerLobby.classList.remove('hidden');
+    waitingStatus.textContent = `${players.length}/${roomMaxPlayers} joueurs dans le salon`;
+
+    for (let i = 0; i < roomMaxPlayers; i++) {
         const p = players[i];
         const card = document.createElement('div');
         card.className = 'lobby-card';
@@ -384,6 +464,16 @@ function updatePlayerList(players) {
                 hostBadge.textContent = 'Hôte';
                 card.appendChild(hostBadge);
             }
+
+            if (me?.role === 'P1' && p.id !== me.id) {
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'remove-player-btn';
+                removeBtn.type = 'button';
+                removeBtn.textContent = 'Retirer';
+                removeBtn.setAttribute('aria-label', `Retirer Joueur ${p.role.replace('P', '')}`);
+                removeBtn.addEventListener('click', () => socket.emit('removePlayer', p.id));
+                card.appendChild(removeBtn);
+            }
         } else {
             card.classList.add('empty');
             
@@ -403,24 +493,28 @@ function updatePlayerList(players) {
     // Toggle button visibility based on role and player counts
     if (me) {
         const isHost = me.role === 'P1';
-        const readyCount = players.filter(p => p.ready).length;
+        const everyoneReady = players.length >= 2 && players.every(player => player.ready);
+
+        if (!targetText) {
+            readinessMessage.textContent = isHost
+                ? 'Choisissez une thématique pour préparer la course.'
+                : 'L’hôte choisit la thématique.';
+        } else if (players.length < 2) {
+            readinessMessage.textContent = 'Invitez au moins un autre joueur pour commencer.';
+        } else if (!everyoneReady) {
+            const waitingCount = players.filter(player => !player.ready).length;
+            readinessMessage.textContent = `En attente de ${waitingCount} joueur${waitingCount > 1 ? 's' : ''}.`;
+        } else {
+            readinessMessage.textContent = 'Tout le monde est prêt. La course peut commencer !';
+        }
         
         if (targetText) {
             if (isHost) {
                 readyBtn.classList.toggle('hidden', me.ready);
                 startGameBtnHost.classList.toggle('hidden', !me.ready);
-                // Enable button only if at least 2 players are ready
-                startGameBtnHost.disabled = readyCount < 2;
-                startGameBtnHost.style.opacity = readyCount < 2 ? '0.5' : '1';
-                
-                if (players.length === 1) {
-                    soloBtn.classList.remove('hidden');
-                } else {
-                    soloBtn.classList.add('hidden');
-                }
+                startGameBtnHost.disabled = !everyoneReady;
             } else {
                 startGameBtnHost.classList.add('hidden');
-                soloBtn.classList.add('hidden');
                 
                 if (me.ready) {
                     readyBtn.classList.add('hidden');
@@ -431,9 +525,9 @@ function updatePlayerList(players) {
         } else {
             readyBtn.classList.add('hidden');
             startGameBtnHost.classList.add('hidden');
-            soloBtn.classList.add('hidden');
         }
     }
+    soloBtn.classList.add('hidden');
 }
 
 function setupTextDisplay(text) {

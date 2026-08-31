@@ -19,8 +19,12 @@ The system MUST play a distinct high-stakes beep sound whenever an opponent's sc
 - **THEN** the client browser SHALL play the alert oscillator sound immediately
 
 ### Requirement: Glassmorphic podium results display
-At the end of the game timer, the system MUST render a 3D-styled glassmorphic podium displaying the names and stats of the top 3 players, accompanied by a detailed scoreboard table for all other participants.
+At the end of the game timer, the system MUST render a 3D-styled glassmorphic podium displaying the names and stats of up to the top 3 players, accompanied by a detailed scoreboard table for participants ranked 4th through 6th when present.
 
-#### Scenario: Podium rendering at end game
-- **WHEN** the 60-second timer expires
-- **THEN** the client interface SHALL transition to the results screen and inject the 1st, 2nd, and 3rd place players into Gold, Silver, and Bronze styled glass containers, followed by a listing of the 4th through 10th place players' detailed scores
+#### Scenario: Results for a six-player game
+- **WHEN** the 60-second timer expires in a game with 6 players
+- **THEN** the client interface SHALL show the 1st, 2nd, and 3rd place players in Gold, Silver, and Bronze styled glass containers followed by detailed rows for the 4th, 5th, and 6th place players
+
+#### Scenario: Results for fewer than four players
+- **WHEN** the timer expires in a game with 1, 2, or 3 players
+- **THEN** the client interface SHALL render only the available podium positions and SHALL hide the additional standings table

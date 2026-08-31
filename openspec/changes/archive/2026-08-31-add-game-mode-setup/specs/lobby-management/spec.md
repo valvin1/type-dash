@@ -1,9 +1,10 @@
-# lobby-management Specification
+## RENAMED Requirements
 
-## Purpose
-Define multiplayer room capacity, host succession, and the authorization rules that control when a race may start.
+- FROM: `Room capacity limit of 10`
+- TO: `Configurable room capacity from 2 to 6`
 
-## Requirements
+## MODIFIED Requirements
+
 ### Requirement: Configurable room capacity from 2 to 6
 The system MUST enforce each multiplayer room's host-selected maximum capacity, which MUST be an integer from 2 through 6, and reject connections once that room-specific capacity is reached.
 
@@ -14,13 +15,6 @@ The system MUST enforce each multiplayer room's host-selected maximum capacity, 
 #### Scenario: Capacity remains unchanged on replay
 - **WHEN** players request a replay in a multiplayer room whose `maxPlayers` is 5
 - **THEN** the server SHALL reset the game state while retaining `maxPlayers` equal to 5
-
-### Requirement: Dynamic Host assignment and promotion
-The system MUST designate the first player joining a room as the Host. If the Host disconnects, the system MUST automatically promote the next connected player to the Host role and broadcast the updated player list.
-
-#### Scenario: Automatic host promotion upon disconnect
-- **WHEN** Host `P1` disconnects from the room
-- **THEN** the server SHALL assign the Host role to the next player in the array (`players[0]`) and emit `'playerLeft'` with the updated player list
 
 ### Requirement: Host-Controlled start execution
 The system MUST allow only the Host to trigger the countdown, only while the room is waiting, only when at least 2 players are connected, and only when every connected player including the Host is ready.
@@ -36,6 +30,8 @@ The system MUST allow only the Host to trigger the countdown, only while the roo
 #### Scenario: Non-host attempts to start
 - **WHEN** a non-host player emits the start command even though every connected player is ready
 - **THEN** the server SHALL keep the room in the waiting state and SHALL NOT broadcast a countdown
+
+## ADDED Requirements
 
 ### Requirement: Host removal of a waiting player
 The system MUST allow the Host to remove another connected player from a multiplayer room while the room is waiting, and MUST reject removal requests from non-hosts, for the Host, for unknown targets, or after countdown has begun.

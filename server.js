@@ -10,7 +10,8 @@ const io = new Server(server);
 
 const PORT = Number(process.env.PORT) || 3000;
 const TICK_MS = Number(process.env.GAME_TICK_MS) || 1000;
-const MAX_PLAYERS = 10;
+const MAX_MULTIPLAYER_PLAYERS = 6;
+const GAME_MODES = new Set(['solo', 'multiplayer']);
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const DATA_DIR = path.join(__dirname, 'data');
 
@@ -51,6 +52,56 @@ function getSocketRoom(socket) {
     return roomId ? rooms[roomId] : null;
 }
 
+function serializeRoom(room) {
+    return {
+        text: room.text,
+        players: room.players,
+        gameState: room.gameState,
+        themes: getCategories(),
+        currentTheme: room.theme,
+        mode: room.mode,
+        maxPlayers: room.maxPlayers
+    };
+}
+
+function addPlayerToRoom(socket, roomId, room) {
+    socket.data.roomId = roomId;
+    socket.join(roomId);
+
+    room.players.push({
+        id: socket.id,
+        ready: false,
+        wpm: 0,
+        accuracy: 0,
+        progress: 0,
+        currentWordIndex: 0,
+        role: `P${room.players.length + 1}`
+    });
+
+    socket.emit('roomData', serializeRoom(room));
+    io.to(roomId).emit('playerJoined', room.players);
+}
+
+function removePlayerFromRoom(roomId, playerId) {
+    const room = rooms[roomId];
+    if (!room) return false;
+
+    const previousLength = room.players.length;
+    room.players = room.players.filter(player => player.id !== playerId);
+    if (room.players.length === previousLength) return false;
+
+    room.players.forEach((player, index) => {
+        player.role = `P${index + 1}`;
+    });
+
+    if (room.players.length === 0) {
+        deleteRoom(roomId);
+    } else {
+        io.to(roomId).emit('playerLeft', room.players);
+    }
+    return true;
+}
+
 function clearRoomTimers(room) {
     if (room.countdownTimer) clearInterval(room.countdownTimer);
     if (room.gameTimer) clearInterval(room.gameTimer);
@@ -68,6 +119,45 @@ function deleteRoom(roomId) {
 io.on('connection', (socket) => {
     console.log('A user connected:', socket.id);
 
+    socket.on('createRoom', (data) => {
+        if (socket.data.roomId) {
+            return emitRoomError(socket, 'Vous avez déjà rejoint un salon');
+        }
+        if (!data || typeof data !== 'object') {
+            return emitRoomError(socket, 'Configuration de partie non valide');
+        }
+
+        const { roomId, mode, maxPlayers } = data;
+        if (typeof roomId !== 'string' || !ROOM_ID_PATTERN.test(roomId)) {
+            return emitRoomError(socket, 'Identifiant de salon non valide');
+        }
+        if (!GAME_MODES.has(mode) || !Number.isInteger(maxPlayers)) {
+            return emitRoomError(socket, 'Configuration de partie non valide');
+        }
+        if (mode === 'solo' && maxPlayers !== 1) {
+            return emitRoomError(socket, 'Configuration de partie non valide');
+        }
+        if (mode === 'multiplayer' && (maxPlayers < 2 || maxPlayers > MAX_MULTIPLAYER_PLAYERS)) {
+            return emitRoomError(socket, 'Configuration de partie non valide');
+        }
+        if (rooms[roomId]) {
+            return emitRoomError(socket, 'Ce salon existe déjà');
+        }
+
+        const room = rooms[roomId] = {
+            mode,
+            maxPlayers,
+            players: [],
+            text: null,
+            theme: null,
+            gameState: 'waiting',
+            countdownTimer: null,
+            gameTimer: null
+        };
+
+        addPlayerToRoom(socket, roomId, room);
+    });
+
     socket.on('joinRoom', (roomId) => {
         if (socket.data.roomId) {
             return emitRoomError(socket, 'Vous avez déjà rejoint un salon');
@@ -76,47 +166,21 @@ io.on('connection', (socket) => {
             return emitRoomError(socket, 'Identifiant de salon non valide');
         }
 
-        let room = rooms[roomId];
-        if (room && room.gameState !== 'waiting') {
+        const room = rooms[roomId];
+        if (!room) {
+            return emitRoomError(socket, 'Ce salon n’existe plus');
+        }
+        if (room.mode !== 'multiplayer') {
+            return emitRoomError(socket, 'Cette partie solo est privée');
+        }
+        if (room.gameState !== 'waiting') {
             return emitRoomError(socket, 'Cette partie a déjà commencé');
         }
-        if (room && room.players.length >= MAX_PLAYERS) {
+        if (room.players.length >= room.maxPlayers) {
             return emitRoomError(socket, 'Le salon est complet');
         }
 
-        if (!room) {
-            room = rooms[roomId] = {
-                players: [],
-                text: null,
-                theme: null,
-                gameState: 'waiting',
-                countdownTimer: null,
-                gameTimer: null
-            };
-        }
-
-        socket.data.roomId = roomId;
-        socket.join(roomId);
-
-        const role = `P${room.players.length + 1}`;
-        room.players.push({
-            id: socket.id,
-            ready: false,
-            wpm: 0,
-            accuracy: 0,
-            progress: 0,
-            currentWordIndex: 0,
-            role
-        });
-
-        socket.emit('roomData', {
-            text: room.text,
-            players: room.players,
-            gameState: room.gameState,
-            themes: getCategories(),
-            currentTheme: room.theme
-        });
-        io.to(roomId).emit('playerJoined', room.players);
+        addPlayerToRoom(socket, roomId, room);
     });
 
     socket.on('chooseTheme', (theme) => {
@@ -148,18 +212,38 @@ io.on('connection', (socket) => {
 
     socket.on('startGame', () => {
         const room = getSocketRoom(socket);
-        if (!room || room.gameState !== 'waiting') return;
+        if (!room || room.mode !== 'multiplayer' || room.gameState !== 'waiting') return;
 
         const player = room.players.find(candidate => candidate.id === socket.id);
-        const readyCount = room.players.filter(candidate => candidate.ready).length;
-        if (player?.role === 'P1' && player.ready && readyCount >= 2) {
+        const everyoneReady = room.players.length >= 2 && room.players.every(candidate => candidate.ready);
+        if (player?.role === 'P1' && everyoneReady) {
             startCountdown(socket.data.roomId);
         }
     });
 
+    socket.on('removePlayer', (targetPlayerId) => {
+        if (typeof targetPlayerId !== 'string') return;
+
+        const room = getSocketRoom(socket);
+        if (!room || room.mode !== 'multiplayer' || room.gameState !== 'waiting') return;
+
+        const host = room.players.find(player => player.id === socket.id);
+        const target = room.players.find(player => player.id === targetPlayerId);
+        if (host?.role !== 'P1' || !target || target.id === host.id) return;
+
+        const roomId = socket.data.roomId;
+        const targetSocket = io.sockets.sockets.get(target.id);
+        if (targetSocket) {
+            targetSocket.leave(roomId);
+            targetSocket.data.roomId = null;
+            targetSocket.emit('removedFromRoom', 'L’hôte vous a retiré de la partie');
+        }
+        removePlayerFromRoom(roomId, target.id);
+    });
+
     socket.on('playSolo', () => {
         const room = getSocketRoom(socket);
-        if (!room || room.gameState !== 'waiting' || !room.text || room.players.length !== 1) return;
+        if (!room || room.mode !== 'solo' || room.gameState !== 'waiting' || !room.text || room.players.length !== 1) return;
 
         const player = room.players.find(candidate => candidate.id === socket.id);
         if (player?.role === 'P1') {
@@ -184,13 +268,7 @@ io.on('connection', (socket) => {
             player.accuracy = 0;
             player.currentWordIndex = 0;
         });
-        io.to(socket.data.roomId).emit('roomData', {
-            text: null,
-            players: room.players,
-            gameState: room.gameState,
-            themes: getCategories(),
-            currentTheme: null
-        });
+        io.to(socket.data.roomId).emit('roomData', serializeRoom(room));
     });
 
     socket.on('updateProgress', (data) => {
@@ -220,19 +298,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
         const roomId = socket.data.roomId;
-        const room = roomId ? rooms[roomId] : null;
-        if (!room) return;
-
-        room.players = room.players.filter(player => player.id !== socket.id);
-        room.players.forEach((player, index) => {
-            player.role = `P${index + 1}`;
-        });
-
-        if (room.players.length === 0) {
-            deleteRoom(roomId);
-        } else {
-            io.to(roomId).emit('playerLeft', room.players);
-        }
+        if (roomId) removePlayerFromRoom(roomId, socket.id);
     });
 });
 
