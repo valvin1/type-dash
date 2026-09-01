@@ -5,6 +5,8 @@ multiplayer rooms for 2–6 players. A host chooses the room capacity, shares it
 URL, selects a French text category, and starts the race when everyone present
 is ready.
 
+**Live demo:** [https://typedash-97r0.onrender.com/](https://typedash-97r0.onrender.com/)
+
 ## Features
 
 - Initial Solo or Multijoueur mode selection
