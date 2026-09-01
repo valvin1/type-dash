@@ -16,10 +16,11 @@ is ready.
 - Server-controlled countdown and 60-second game clock
 - Live WPM, accuracy, rankings, and multi-lane progress display
 - Final top-three podium and standings table
-- Solo play and replay support
+- Solo retries against a session-only ghost of the best eligible run on the current text
+- Separate Solo actions to retry the exact text or choose a new one
 
 The active OpenSpec change is in
-`openspec/changes/add-game-mode-setup/`.
+`openspec/changes/add-solo-ghost-mode/`.
 
 ## Architecture
 
