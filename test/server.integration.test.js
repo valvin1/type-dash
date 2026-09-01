@@ -78,6 +78,24 @@ async function selectFirstTheme(client, themes) {
     return updated;
 }
 
+async function completeSoloRun(client, startEvent, updates) {
+    const started = waitFor(client, 'gameStarted');
+    const finished = waitFor(client, 'gameFinished');
+    client.emit(startEvent);
+    await started;
+
+    for (const { delayMs = 0, ...update } of updates) {
+        if (delayMs > 0) await wait(delayMs);
+        client.emit('updateProgress', update);
+    }
+
+    return finished;
+}
+
+function soloUpdate({ progress, wpm, accuracy, currentWordIndex, correctWords, delayMs = 0 }) {
+    return { progress, wpm, accuracy, currentWordIndex, correctWords, delayMs };
+}
+
 test('health check and configured multiplayer lifecycle', async (t) => {
     const fixture = await createFixture(t);
     const healthResponse = await fetch(`${fixture.url}/health`);
@@ -322,7 +340,7 @@ test('only the host can remove another player while waiting', async (t) => {
     assert.equal(rooms['removal-room'].players.length, 3);
 });
 
-test('solo starts with one player and replay preserves its configuration', async (t) => {
+test('solo ghost eligibility, recorded timing, and best-run selection', async (t) => {
     const fixture = await createFixture(t);
     const soloPlayer = await fixture.connect();
     const data = await createRoom(soloPlayer, 'solo-game', 'solo', 1);
@@ -331,20 +349,92 @@ test('solo starts with one player and replay preserves its configuration', async
     assert.equal(data.maxPlayers, 1);
     assert.equal(data.players.length, 1);
 
-    await selectFirstTheme(soloPlayer, data.themes);
-    const started = waitFor(soloPlayer, 'gameStarted');
-    const finished = waitFor(soloPlayer, 'gameFinished');
-    soloPlayer.emit('playSolo');
-    await started;
-    assert.equal(rooms['solo-game'].gameState, 'playing');
-    assert.equal((await finished).length, 1);
+    const theme = await selectFirstTheme(soloPlayer, data.themes);
+    const shortResult = await completeSoloRun(soloPlayer, 'playSolo', [
+        soloUpdate({ progress: 20, wpm: 40, accuracy: 100, currentWordIndex: 2, correctWords: 2 })
+    ]);
+    assert.equal(shortResult.ghostResult, null);
+    assert.equal(rooms['solo-game'].ghost, null);
 
-    const replayData = waitFor(soloPlayer, 'roomData');
-    soloPlayer.emit('playAgain');
-    const replay = await replayData;
-    assert.equal(replay.mode, 'solo');
-    assert.equal(replay.maxPlayers, 1);
-    assert.equal(replay.players.length, 1);
-    assert.equal(replay.players[0].ready, false);
-    assert.equal(replay.text, null);
+    const eligibleReplayData = waitFor(soloPlayer, 'roomData');
+    const firstEligibleResultPromise = completeSoloRun(soloPlayer, 'retrySoloText', [
+        soloUpdate({ progress: 10, wpm: 45, accuracy: 100, currentWordIndex: 1, correctWords: 1, delayMs: 10 }),
+        soloUpdate({ progress: 30, wpm: 60, accuracy: 96, currentWordIndex: 3, correctWords: 3, delayMs: 35 })
+    ]);
+    const eligibleReplay = await eligibleReplayData;
+    assert.equal(eligibleReplay.text, theme.text);
+    assert.equal(eligibleReplay.ghost, null);
+
+    const firstEligibleResult = await firstEligibleResultPromise;
+    assert.equal(firstEligibleResult.ghostResult.outcome, 'new-best');
+    assert.equal(firstEligibleResult.ghost, null);
+    assert.equal(rooms['solo-game'].players.length, 1);
+    assert.equal(rooms['solo-game'].ghost.score, 58);
+    assert.equal(rooms['solo-game'].ghost.correctWords, 3);
+    assert.equal(rooms['solo-game'].ghost.snapshots.length, 2);
+    assert.ok(rooms['solo-game'].ghost.snapshots[1].elapsedMs > rooms['solo-game'].ghost.snapshots[0].elapsedMs);
+
+    const originalGhost = structuredClone(rooms['solo-game'].ghost);
+    const tiedReplayData = waitFor(soloPlayer, 'roomData');
+    const tiedResultPromise = completeSoloRun(soloPlayer, 'retrySoloText', [
+        soloUpdate({ progress: 30, wpm: 60, accuracy: 96, currentWordIndex: 3, correctWords: 3 })
+    ]);
+    const tiedReplay = await tiedReplayData;
+    assert.deepEqual(tiedReplay.ghost.snapshots, originalGhost.snapshots);
+    const tiedResult = await tiedResultPromise;
+    assert.equal(tiedResult.ghostResult.outcome, 'not-beaten');
+    assert.deepEqual(rooms['solo-game'].ghost, originalGhost);
+
+    const progressResult = await completeSoloRun(soloPlayer, 'retrySoloText', [
+        soloUpdate({ progress: 40, wpm: 60, accuracy: 96, currentWordIndex: 4, correctWords: 4 })
+    ]);
+    assert.equal(progressResult.ghostResult.outcome, 'new-best');
+    assert.equal(progressResult.ghostResult.differences.score, 0);
+    assert.equal(progressResult.ghostResult.differences.progress, 10);
+    assert.equal(rooms['solo-game'].ghost.progress, 40);
+
+    const accuracyResult = await completeSoloRun(soloPlayer, 'retrySoloText', [
+        soloUpdate({ progress: 40, wpm: 59, accuracy: 98, currentWordIndex: 4, correctWords: 4 })
+    ]);
+    assert.equal(accuracyResult.ghostResult.outcome, 'new-best');
+    assert.equal(accuracyResult.ghostResult.differences.score, 0);
+    assert.equal(accuracyResult.ghostResult.differences.accuracy, 2);
+    assert.equal(rooms['solo-game'].ghost.accuracy, 98);
+});
+
+test('solo ghosts clear with text changes and stay isolated to their room', async (t) => {
+    const fixture = await createFixture(t);
+    const firstPlayer = await fixture.connect();
+    const secondPlayer = await fixture.connect();
+    const firstData = await createRoom(firstPlayer, 'solo-isolation-a', 'solo', 1);
+    const secondData = await createRoom(secondPlayer, 'solo-isolation-b', 'solo', 1);
+
+    await selectFirstTheme(firstPlayer, firstData.themes);
+    await selectFirstTheme(secondPlayer, secondData.themes);
+
+    await Promise.all([
+        completeSoloRun(firstPlayer, 'playSolo', [
+            soloUpdate({ progress: 35, wpm: 55, accuracy: 100, currentWordIndex: 3, correctWords: 3 })
+        ]),
+        completeSoloRun(secondPlayer, 'playSolo', [
+            soloUpdate({ progress: 45, wpm: 70, accuracy: 95, currentWordIndex: 4, correctWords: 4 })
+        ])
+    ]);
+
+    assert.equal(rooms['solo-isolation-a'].ghost.wpm, 55);
+    assert.equal(rooms['solo-isolation-b'].ghost.wpm, 70);
+    assert.notDeepEqual(rooms['solo-isolation-a'].ghost, rooms['solo-isolation-b'].ghost);
+
+    const textSelection = waitFor(firstPlayer, 'roomData');
+    firstPlayer.emit('changeSoloText');
+    const reset = await textSelection;
+    assert.equal(reset.text, null);
+    assert.equal(reset.currentTheme, null);
+    assert.equal(reset.ghost, null);
+    assert.equal(rooms['solo-isolation-a'].ghost, null);
+    assert.equal(rooms['solo-isolation-b'].ghost.wpm, 70);
+
+    secondPlayer.close();
+    await wait(20);
+    assert.equal(rooms['solo-isolation-b'], undefined);
 });

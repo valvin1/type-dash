@@ -19,6 +19,9 @@ const readyBtn = document.getElementById('ready-btn');
 const startGameBtnHost = document.getElementById('start-game-btn-host');
 const soloBtn = document.getElementById('solo-btn');
 const playAgainBtn = document.getElementById('play-again-btn');
+const soloResultActions = document.getElementById('solo-result-actions');
+const retrySoloTextBtn = document.getElementById('retry-solo-text-btn');
+const changeSoloTextBtn = document.getElementById('change-solo-text-btn');
 const copyLinkBtn = document.getElementById('copy-link');
 const roomIdDisplay = document.querySelector('#room-id-display span');
 const typingInput = document.getElementById('typing-input');
@@ -48,6 +51,9 @@ let activePlayers = [];
 let availableThemes = [];
 let selectedTheme = null;
 let lastEmitTime = 0;
+let ghostRecord = null;
+let ghostPlayer = null;
+let ghostReplayTimers = [];
 const throttleMs = 150;
 
 // Audio Context for notification
@@ -92,7 +98,9 @@ socket.on('roomData', (data) => {
     targetText = data.text || '';
     currentMode = data.mode;
     roomMaxPlayers = data.maxPlayers;
+    ghostRecord = data.ghost || null;
     resetGameState();
+    ghostPlayer = ghostRecord ? createGhostCompetitor(ghostRecord) : null;
     showScreen('waiting');
 
     const selectedThemeDisplay = document.getElementById('selected-theme-display');
@@ -184,22 +192,24 @@ socket.on('countdown', (count) => {
     if (count === 3) {
         const racetrack = document.getElementById('racetrack-lanes');
         racetrack.innerHTML = '';
-        activePlayers.forEach(p => {
+        const competitors = ghostPlayer ? [...activePlayers, ghostPlayer] : activePlayers;
+        competitors.forEach(p => {
             const lane = document.createElement('div');
             lane.className = 'racetrack-lane';
             lane.id = `lane-${p.id}`;
             if (p.id === socket.id) lane.classList.add('me');
+            if (p.isGhost) lane.classList.add('ghost');
             
             const label = document.createElement('div');
             label.className = 'lane-label';
-            label.textContent = p.id === socket.id ? 'Vous' : (p.role === 'P1' ? 'Hôte' : `Joueur ${p.role.replace('P', '')}`);
+            label.textContent = getCompetitorName(p);
             
             const track = document.createElement('div');
             track.className = 'lane-track';
             
             const car = document.createElement('div');
             car.className = 'lane-car';
-            car.textContent = p.role;
+            car.textContent = p.isGhost ? '👻' : p.role;
             
             track.appendChild(car);
             
@@ -221,6 +231,7 @@ socket.on('gameStarted', () => {
     typingInput.focus();
     startTime = Date.now();
     gameActive = true;
+    startGhostReplay();
 });
 
 socket.on('timerUpdate', (time) => {
@@ -245,11 +256,19 @@ socket.on('opponentUpdate', (player) => {
     updateLeaderboard();
 });
 
-socket.on('gameFinished', (players) => {
+socket.on('gameFinished', (result) => {
     gameActive = false;
+    clearGhostReplayTimers();
     typingInput.disabled = true;
     showScreen('results');
-    renderPodiumAndStandings(players);
+    const players = Array.isArray(result) ? result : result.players;
+    const resultPlayers = [...players];
+    if (!Array.isArray(result) && result.ghost) resultPlayers.push(result.ghost);
+    renderPodiumAndStandings(resultPlayers);
+    renderGhostResult(Array.isArray(result) ? null : result.ghostResult);
+    const isSoloResult = currentMode === 'solo';
+    soloResultActions.classList.toggle('hidden', !isSoloResult);
+    playAgainBtn.classList.toggle('hidden', isSoloResult);
 });
 
 // UI Actions
@@ -298,7 +317,16 @@ playAgainBtn.addEventListener('click', () => {
     socket.emit('playAgain');
 });
 
+retrySoloTextBtn.addEventListener('click', () => {
+    socket.emit('retrySoloText');
+});
+
+changeSoloTextBtn.addEventListener('click', () => {
+    socket.emit('changeSoloText');
+});
+
 function resetGameState() {
+    clearGhostReplayTimers();
     currentWordIndex = 0;
     gameActive = false;
     startTime = null;
@@ -392,6 +420,7 @@ function createRoom(mode, maxPlayers) {
 }
 
 function clearRoomContext() {
+    clearGhostReplayTimers();
     currentRoomId = null;
     currentMode = null;
     roomMaxPlayers = 1;
@@ -399,6 +428,8 @@ function clearRoomContext() {
     availableThemes = [];
     selectedTheme = null;
     targetText = '';
+    ghostRecord = null;
+    ghostPlayer = null;
     roomInfo.classList.add('hidden');
     multiplayerSetup.classList.add('hidden');
     modeSelection.classList.remove('hidden');
@@ -577,9 +608,54 @@ function updateStats() {
     // Throttled WebSocket update
     const now = Date.now();
     if (now - lastEmitTime >= throttleMs || progress === 100) {
-        socket.emit('updateProgress', { progress, wpm, accuracy, currentWordIndex });
+        socket.emit('updateProgress', { progress, wpm, accuracy, currentWordIndex, correctWords });
         lastEmitTime = now;
     }
+}
+
+function createGhostCompetitor(record) {
+    return {
+        ...record,
+        progress: 0,
+        wpm: 0,
+        accuracy: 100,
+        score: 0,
+        isGhost: true
+    };
+}
+
+function clearGhostReplayTimers() {
+    ghostReplayTimers.forEach(timer => clearTimeout(timer));
+    ghostReplayTimers = [];
+}
+
+function startGhostReplay() {
+    clearGhostReplayTimers();
+    if (!ghostPlayer || !Array.isArray(ghostRecord?.snapshots)) return;
+
+    ghostRecord.snapshots.forEach(snapshot => {
+        const timer = setTimeout(() => {
+            if (!gameActive || !ghostPlayer) return;
+            applyGhostSnapshot(snapshot);
+        }, Math.max(0, Number(snapshot.elapsedMs) || 0));
+        ghostReplayTimers.push(timer);
+    });
+}
+
+function applyGhostSnapshot(snapshot) {
+    ghostPlayer.progress = snapshot.progress;
+    ghostPlayer.wpm = snapshot.wpm;
+    ghostPlayer.accuracy = snapshot.accuracy;
+
+    const lane = document.getElementById(`lane-${ghostPlayer.id}`);
+    if (lane) {
+        const car = lane.querySelector('.lane-car');
+        if (car) car.style.left = `${ghostPlayer.progress}%`;
+        const stats = lane.querySelector('.lane-stats');
+        if (stats) stats.textContent = `${ghostPlayer.wpm} WPM`;
+    }
+
+    updateLeaderboard();
 }
 
 function updateLeaderboard() {
@@ -587,7 +663,8 @@ function updateLeaderboard() {
     const myAcc = parseInt(accDisplay.textContent) || 100;
     const myScore = Math.round(myWpm * (myAcc / 100));
     
-    const standings = activePlayers.map(p => {
+    const competitors = ghostPlayer ? [...activePlayers, ghostPlayer] : activePlayers;
+    const standings = competitors.map(p => {
         if (p.id === socket.id) {
             return { id: p.id, score: myScore };
         } else {
@@ -616,6 +693,12 @@ function updateLeaderboard() {
     }
     
     myLastRank = myCurrentRank;
+}
+
+function getCompetitorName(player) {
+    if (player.isGhost) return 'Votre record';
+    if (player.id === socket.id) return 'Vous';
+    return player.role === 'P1' ? 'Hôte' : `Joueur ${player.role.replace('P', '')}`;
 }
 
 function calculateScore(player) {
@@ -650,17 +733,18 @@ function renderPodiumAndStandings(players) {
         
         const spotDiv = document.createElement('div');
         spotDiv.className = `podium-spot ${item.spot}`;
+        if (p.isGhost) spotDiv.classList.add('ghost');
 
         const playerDiv = document.createElement('div');
         playerDiv.className = 'podium-player';
 
         const avatar = document.createElement('div');
         avatar.className = 'podium-avatar';
-        avatar.textContent = item.rank === 1 ? '🥇' : (item.rank === 2 ? '🥈' : '🥉');
+        avatar.textContent = p.isGhost ? '👻' : (item.rank === 1 ? '🥇' : (item.rank === 2 ? '🥈' : '🥉'));
 
         const name = document.createElement('div');
         name.className = 'podium-name';
-        name.textContent = p.id === socket.id ? 'Vous' : `Joueur ${p.role.replace('P', '')}`;
+        name.textContent = getResultCompetitorName(p);
 
         const wpm = document.createElement('div');
         wpm.className = 'podium-wpm';
@@ -699,7 +783,7 @@ function renderPodiumAndStandings(players) {
             tdRank.textContent = `${rank}e`;
 
             const tdName = document.createElement('td');
-            tdName.textContent = p.id === socket.id ? 'Vous' : `Joueur ${p.role.replace('P', '')}`;
+            tdName.textContent = getResultCompetitorName(p);
 
             const tdScore = document.createElement('td');
             tdScore.textContent = `${p.score} pts`;
@@ -720,6 +804,40 @@ function renderPodiumAndStandings(players) {
     } else {
         standingsContainer.classList.add('hidden');
     }
+}
+
+function renderGhostResult(ghostResult) {
+    const feedback = document.getElementById('ghost-result-feedback');
+    if (!ghostResult) {
+        feedback.classList.add('hidden');
+        feedback.classList.remove('new-best', 'not-beaten');
+        return;
+    }
+
+    const isNewBest = ghostResult.outcome === 'new-best';
+    feedback.classList.remove('hidden', 'new-best', 'not-beaten');
+    feedback.classList.add(isNewBest ? 'new-best' : 'not-beaten');
+    document.getElementById('ghost-result-heading').textContent = isNewBest
+        ? 'Nouveau meilleur score'
+        : 'Record non battu';
+
+    const differences = ghostResult.differences;
+    document.getElementById('ghost-diff-score').textContent = formatDifference(differences.score);
+    document.getElementById('ghost-diff-wpm').textContent = formatDifference(differences.wpm);
+    document.getElementById('ghost-diff-accuracy').textContent = formatDifference(differences.accuracy, '%');
+    document.getElementById('ghost-diff-progress').textContent = formatDifference(differences.progress, '%');
+}
+
+function formatDifference(value, suffix = '') {
+    const rounded = Math.round(Number(value) * 10) / 10;
+    const prefix = rounded > 0 ? '+' : '';
+    return `${prefix}${rounded}${suffix}`;
+}
+
+function getResultCompetitorName(player) {
+    if (player.isGhost) return 'Votre record';
+    if (player.id === socket.id) return 'Vous';
+    return `Joueur ${player.role.replace('P', '')}`;
 }
 
 init();

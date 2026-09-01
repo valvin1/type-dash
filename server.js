@@ -11,6 +11,8 @@ const io = new Server(server);
 const PORT = Number(process.env.PORT) || 3000;
 const TICK_MS = Number(process.env.GAME_TICK_MS) || 1000;
 const MAX_MULTIPLAYER_PLAYERS = 6;
+const MIN_GHOST_CORRECT_WORDS = 3;
+const GHOST_ID = '__solo_ghost__';
 const GAME_MODES = new Set(['solo', 'multiplayer']);
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const DATA_DIR = path.join(__dirname, 'data');
@@ -52,8 +54,81 @@ function getSocketRoom(socket) {
     return roomId ? rooms[roomId] : null;
 }
 
-function serializeRoom(room) {
+function calculateScore(stats) {
+    return Math.round(stats.wpm * stats.accuracy / 100);
+}
+
+function isBetterRun(candidate, incumbent) {
+    if (!incumbent) return true;
+
+    return candidate.score > incumbent.score
+        || (candidate.score === incumbent.score && candidate.progress > incumbent.progress)
+        || (candidate.score === incumbent.score
+            && candidate.progress === incumbent.progress
+            && candidate.accuracy > incumbent.accuracy);
+}
+
+function calculateDifferences(candidate, incumbent) {
+    const baseline = incumbent || { score: 0, wpm: 0, accuracy: 0, progress: 0 };
     return {
+        score: candidate.score - baseline.score,
+        wpm: candidate.wpm - baseline.wpm,
+        accuracy: candidate.accuracy - baseline.accuracy,
+        progress: candidate.progress - baseline.progress
+    };
+}
+
+function buildCompletedSoloRun(room) {
+    const player = room.players[0];
+    const run = room.currentRun;
+    if (!player || !run || player.correctWords < MIN_GHOST_CORRECT_WORDS) return null;
+
+    return {
+        id: GHOST_ID,
+        role: 'GHOST',
+        isGhost: true,
+        label: 'Votre record',
+        text: room.text,
+        score: calculateScore(player),
+        wpm: player.wpm,
+        accuracy: player.accuracy,
+        progress: player.progress,
+        correctWords: player.correctWords,
+        snapshots: run.snapshots.map(snapshot => ({ ...snapshot }))
+    };
+}
+
+function finishSoloRun(room) {
+    const previousGhost = room.currentRun?.racedGhost?.text === room.text
+        ? room.currentRun.racedGhost
+        : null;
+    const candidate = buildCompletedSoloRun(room);
+
+    if (!candidate) {
+        return { players: room.players, ghost: previousGhost, ghostResult: null };
+    }
+
+    const beaten = isBetterRun(candidate, previousGhost);
+    const ghostResult = {
+        outcome: beaten ? 'new-best' : 'not-beaten',
+        current: {
+            score: candidate.score,
+            wpm: candidate.wpm,
+            accuracy: candidate.accuracy,
+            progress: candidate.progress,
+            correctWords: candidate.correctWords
+        },
+        previousGhost,
+        differences: calculateDifferences(candidate, previousGhost)
+    };
+
+    const result = { players: room.players, ghost: previousGhost, ghostResult };
+    if (beaten) room.ghost = candidate;
+    return result;
+}
+
+function serializeRoom(room) {
+    const data = {
         text: room.text,
         players: room.players,
         gameState: room.gameState,
@@ -62,6 +137,9 @@ function serializeRoom(room) {
         mode: room.mode,
         maxPlayers: room.maxPlayers
     };
+
+    if (room.mode === 'solo') data.ghost = room.ghost;
+    return data;
 }
 
 function addPlayerToRoom(socket, roomId, room) {
@@ -75,6 +153,7 @@ function addPlayerToRoom(socket, roomId, room) {
         accuracy: 0,
         progress: 0,
         currentWordIndex: 0,
+        correctWords: 0,
         role: `P${room.players.length + 1}`
     });
 
@@ -107,6 +186,27 @@ function clearRoomTimers(room) {
     if (room.gameTimer) clearInterval(room.gameTimer);
     room.countdownTimer = null;
     room.gameTimer = null;
+}
+
+function resetPlayers(room) {
+    room.players.forEach(player => {
+        player.ready = false;
+        player.progress = 0;
+        player.wpm = 0;
+        player.accuracy = 0;
+        player.currentWordIndex = 0;
+        player.correctWords = 0;
+    });
+}
+
+function resetForTextSelection(room) {
+    clearRoomTimers(room);
+    room.gameState = 'waiting';
+    room.theme = null;
+    room.text = null;
+    room.currentRun = null;
+    if (room.mode === 'solo') room.ghost = null;
+    resetPlayers(room);
 }
 
 function deleteRoom(roomId) {
@@ -152,7 +252,9 @@ io.on('connection', (socket) => {
             theme: null,
             gameState: 'waiting',
             countdownTimer: null,
-            gameTimer: null
+            gameTimer: null,
+            ghost: null,
+            currentRun: null
         };
 
         addPlayerToRoom(socket, roomId, room);
@@ -194,6 +296,10 @@ io.on('connection', (socket) => {
         const randomText = getRandomTextFromCategory(theme);
         if (!randomText) return;
 
+        if (room.mode === 'solo') {
+            room.ghost = null;
+            room.currentRun = null;
+        }
         room.theme = theme;
         room.text = randomText;
         io.to(socket.data.roomId).emit('themeUpdated', { theme, text: room.text });
@@ -257,17 +363,31 @@ io.on('connection', (socket) => {
         const room = getSocketRoom(socket);
         if (!room || room.gameState !== 'finished') return;
 
+        resetForTextSelection(room);
+        io.to(socket.data.roomId).emit('roomData', serializeRoom(room));
+    });
+
+    socket.on('retrySoloText', () => {
+        const room = getSocketRoom(socket);
+        if (!room || room.mode !== 'solo' || room.gameState !== 'finished' || !room.text || room.players.length !== 1) return;
+
         clearRoomTimers(room);
         room.gameState = 'waiting';
-        room.theme = null;
-        room.text = null;
-        room.players.forEach(player => {
-            player.ready = false;
-            player.progress = 0;
-            player.wpm = 0;
-            player.accuracy = 0;
-            player.currentWordIndex = 0;
-        });
+        room.currentRun = null;
+        resetPlayers(room);
+
+        const player = room.players[0];
+        io.to(socket.data.roomId).emit('roomData', serializeRoom(room));
+        player.ready = true;
+        io.to(socket.data.roomId).emit('playerReady', room.players);
+        startCountdown(socket.data.roomId);
+    });
+
+    socket.on('changeSoloText', () => {
+        const room = getSocketRoom(socket);
+        if (!room || room.mode !== 'solo' || room.gameState !== 'finished') return;
+
+        resetForTextSelection(room);
         io.to(socket.data.roomId).emit('roomData', serializeRoom(room));
     });
 
@@ -289,10 +409,29 @@ io.on('connection', (socket) => {
         if (wpm < 0 || wpm > 300 || progress < 0 || progress > 100) return;
         if (accuracy < 0 || accuracy > 100 || currentWordIndex < 0 || currentWordIndex > wordCount) return;
 
+        let correctWords = player.correctWords;
+        if (room.mode === 'solo') {
+            correctWords = Number(data.correctWords);
+            if (!Number.isInteger(correctWords) || correctWords < 0 || correctWords > currentWordIndex || correctWords > wordCount) return;
+        }
+
         player.progress = progress;
         player.wpm = wpm;
         player.accuracy = accuracy;
         player.currentWordIndex = currentWordIndex;
+        player.correctWords = correctWords;
+
+        if (room.mode === 'solo' && room.currentRun) {
+            const snapshotLimit = wordCount + 5;
+            if (room.currentRun.snapshots.length < snapshotLimit) {
+                room.currentRun.snapshots.push({
+                    elapsedMs: Math.max(0, Date.now() - room.currentRun.startedAt),
+                    progress,
+                    wpm,
+                    accuracy
+                });
+            }
+        }
         socket.to(socket.data.roomId).emit('opponentUpdate', player);
     });
 
@@ -326,6 +465,13 @@ function startGame(roomId) {
     if (!room || room.gameState !== 'countdown') return;
 
     room.gameState = 'playing';
+    if (room.mode === 'solo') {
+        room.currentRun = {
+            startedAt: Date.now(),
+            snapshots: [],
+            racedGhost: room.ghost
+        };
+    }
     io.to(roomId).emit('gameStarted');
 
     let timeLeft = 60;
@@ -345,7 +491,8 @@ function endGame(roomId) {
     const room = rooms[roomId];
     if (!room) return;
     room.gameState = 'finished';
-    io.to(roomId).emit('gameFinished', room.players);
+    const result = room.mode === 'solo' ? finishSoloRun(room) : room.players;
+    io.to(roomId).emit('gameFinished', result);
 }
 
 function startServer(port = PORT, host = '0.0.0.0') {

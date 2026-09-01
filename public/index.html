@@ -150,6 +150,20 @@
                         </table>
                     </div>
 
+                    <div id="ghost-result-feedback" class="ghost-result-feedback hidden" aria-live="polite">
+                        <h3 id="ghost-result-heading"></h3>
+                        <div class="ghost-differences">
+                            <span>Score <strong id="ghost-diff-score"></strong></span>
+                            <span>WPM <strong id="ghost-diff-wpm"></strong></span>
+                            <span>Précision <strong id="ghost-diff-accuracy"></strong></span>
+                            <span>Progression <strong id="ghost-diff-progress"></strong></span>
+                        </div>
+                    </div>
+
+                    <div id="solo-result-actions" class="result-actions hidden">
+                        <button id="retry-solo-text-btn" class="btn-primary">Réessayer ce texte</button>
+                        <button id="change-solo-text-btn" class="btn-secondary">Changer de texte</button>
+                    </div>
                     <button id="play-again-btn" class="btn-primary">Rejouer</button>
                 </div>
             </section>
