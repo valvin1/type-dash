@@ -10,6 +10,7 @@
 - [x] 2.2 Add pull-request concurrency keyed by pull request and configure superseded validation runs to be cancelled.
 - [x] 2.3 Create the `main` release workflow with complete Git history, Node.js 24 npm caching, locked dependency installation, integration tests, and a non-publishing Docker build before semantic-release.
 - [x] 2.4 Grant only repository-content write access to the release job, pass the built-in GitHub token to semantic-release, and serialize `main` releases without cancelling an active run.
+- [x] 2.5 Add `npm audit --audit-level=high` after dependency installation in both workflows so high or critical vulnerabilities block pull-request validation and releases.
 
 ## 3. Remove GitLab integration
 
@@ -25,3 +26,4 @@
 - [x] 4.4 Run semantic-release in dry-run mode with complete local history and confirm that it derives the expected next release from the latest reachable version tag without modifying tracked files.
 - [x] 4.5 Search active automation, dependency metadata, semantic-release configuration, README, and changelog files and confirm that no case-insensitive GitLab reference remains.
 - [x] 4.6 Record the GitHub repository settings required after merge: Actions content-write permission, compatible tag rules, and required pull-request validation checks on `main`.
+- [x] 4.7 Run the configured dependency audit against the current lockfile and verify both workflows place the audit before tests, Docker build, and release publication.

@@ -8,7 +8,7 @@ The existing `v1.0.0` and earlier tags remain valid release markers. Semantic-re
 
 **Goals:**
 
-- Give pull requests targeting `main` deterministic Node.js test and Docker-build checks.
+- Give pull requests targeting `main` deterministic dependency vulnerability, Node.js test, and Docker-build checks.
 - Prevent a release unless the exact commit on `main` passes the same validation.
 - Publish semantic Git tags and GitHub Releases from `main` using Conventional Commits.
 - Use Git tags, rather than a committed package version, to identify the latest release.
@@ -34,7 +34,7 @@ The release workflow will repeat installation, tests, and Docker build before in
 
 ### Treat the Docker image as the build artifact
 
-Both workflows will use Node.js 24, run `npm ci`, run `npm test`, and build the existing Dockerfile. The project has no npm `build` script, so successfully constructing the production image is the meaningful build verification. Builds will not log in to or push to a registry.
+Both workflows will use Node.js 24, run `npm ci`, run `npm audit --audit-level=high`, run `npm test`, and build the existing Dockerfile. The audit checks the installed lockfile dependency graph against the npm advisory database and exits unsuccessfully when a high or critical vulnerability is found. Low and moderate findings remain visible in the job log but do not fail validation. The project has no npm `build` script, so successfully constructing the production image is the meaningful build verification. Builds will not log in to or push to a registry.
 
 Use the current stable major versions of the official checkout and Node setup actions, enable npm caching from `package-lock.json`, and cancel superseded pull-request runs. The release workflow will use a non-cancelling concurrency group so two rapid pushes to `main` cannot calculate or publish releases concurrently.
 
@@ -67,13 +67,14 @@ Git history and OpenSpec decision records will not be rewritten. Existing commit
 - **The checked-in changelog stops receiving automatic entries** → Preserve it as migrated historical content and direct users to GitHub Releases for versions after this change.
 - **A GitHub ruleset may prevent tag or release creation** → Confirm that GitHub Actions has repository-content write access and that tag rules allow the repository Actions app before merging the workflow.
 - **Building untrusted pull-request code has supply-chain exposure** → Run only on GitHub-hosted ephemeral runners with read-only repository access and no secrets or registry credentials.
+- **The npm advisory service can be temporarily unavailable** → Treat an audit execution error as a failed validation rather than silently releasing without a vulnerability result; rerun the job after service recovery.
 
 ## Migration Plan
 
 1. Add and locally validate the pull-request and release workflow definitions.
 2. Replace the semantic-release plugin set and regenerate the npm lockfile.
 3. Delete the GitLab CI file and migrate GitLab references in documentation and historical changelog URLs.
-4. Run the integration suite, build the Docker image, validate the semantic-release configuration in dry-run mode where credentials permit, and scan tracked files for remaining GitLab references.
+4. Run the high-severity dependency audit, integration suite, and Docker build; validate the semantic-release configuration in dry-run mode where credentials permit; and scan tracked files for remaining GitLab references.
 5. Push the change through a pull request and verify that the read-only CI workflow succeeds.
 6. Before merging, ensure GitHub Actions is allowed to create repository contents and that `main` branch protection requires the CI checks.
 7. Merge to `main` and observe the release workflow. With the current history after `v1.0.0`, the first releasable result is expected to be a minor release if the relevant `feat:` commits remain reachable.

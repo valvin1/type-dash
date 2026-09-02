@@ -1,15 +1,34 @@
 ## ADDED Requirements
 
 ### Requirement: Main changes are validated before release
-The repository SHALL run locked dependency installation, the Node.js integration tests, and the production Docker build for each push to `main` before attempting a release.
+The repository SHALL run locked dependency installation, a dependency vulnerability audit, the Node.js integration tests, and the production Docker build for each push to `main` before attempting a release.
 
 #### Scenario: Main validation succeeds
-- **WHEN** a commit reaches `main` and its installation, tests, and Docker build all succeed
+- **WHEN** a commit reaches `main` and its installation, vulnerability audit, tests, and Docker build all succeed
 - **THEN** the release workflow proceeds to semantic-release
 
 #### Scenario: Main validation fails
-- **WHEN** installation, tests, or the Docker build fails for the current `main` commit
+- **WHEN** installation, the vulnerability audit, tests, or the Docker build fails for the current `main` commit
 - **THEN** semantic-release is not invoked and no release is created
+
+### Requirement: High-severity dependency vulnerabilities block releases
+After locked dependency installation, the release workflow SHALL audit the installed dependency graph and SHALL prevent release publication when npm reports a vulnerability with high or critical severity.
+
+#### Scenario: Release dependencies meet the severity threshold
+- **WHEN** the dependency audit reports no high or critical vulnerability
+- **THEN** main validation continues to the remaining test and build checks
+
+#### Scenario: Release dependencies exceed the severity threshold
+- **WHEN** the dependency audit reports at least one high or critical vulnerability
+- **THEN** the release workflow fails before semantic-release runs and no tag or GitHub Release is created
+
+#### Scenario: Only lower-severity release vulnerabilities are reported
+- **WHEN** the dependency audit reports only low or moderate vulnerabilities
+- **THEN** the findings remain visible in the workflow log and do not block the release because of their severity
+
+#### Scenario: Release dependency audit cannot complete
+- **WHEN** the dependency audit exits unsuccessfully without producing a valid vulnerability result
+- **THEN** the release workflow fails before semantic-release runs
 
 ### Requirement: Release versions are derived from Git history
 Semantic-release SHALL use the latest reachable tag matching `v${version}` and the Conventional Commits added after that tag to determine whether a release is required and whether its version bump is major, minor, or patch.

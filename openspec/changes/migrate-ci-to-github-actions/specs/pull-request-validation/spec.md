@@ -22,6 +22,25 @@ The pull-request workflow SHALL install the locked dependency graph with Node.js
 - **WHEN** dependency installation fails or any integration test fails
 - **THEN** pull-request validation reports a failed check
 
+### Requirement: High-severity dependency vulnerabilities gate pull requests
+After locked dependency installation, the pull-request workflow SHALL audit the installed dependency graph and SHALL fail when npm reports a vulnerability with high or critical severity.
+
+#### Scenario: No high-severity vulnerability is reported
+- **WHEN** the dependency audit reports no high or critical vulnerability
+- **THEN** the vulnerability check succeeds and pull-request validation continues
+
+#### Scenario: High-severity vulnerability is reported
+- **WHEN** the dependency audit reports at least one high or critical vulnerability
+- **THEN** pull-request validation reports a failed check
+
+#### Scenario: Only lower-severity vulnerabilities are reported
+- **WHEN** the dependency audit reports only low or moderate vulnerabilities
+- **THEN** the findings remain visible in the workflow log and the vulnerability check does not fail because of their severity
+
+#### Scenario: Dependency audit cannot complete
+- **WHEN** the dependency audit exits unsuccessfully without producing a valid vulnerability result
+- **THEN** pull-request validation reports a failed check rather than bypassing the audit
+
 ### Requirement: Production Docker construction gates pull requests
 The pull-request workflow SHALL build the repository's production Dockerfile and SHALL NOT publish the resulting image.
 
