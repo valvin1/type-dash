@@ -1,6 +1,7 @@
 {
   "name": "antigravity-test",
-  "version": "1.0.0",
+  "version": "0.0.0-semantically-released",
+  "private": true,
   "description": "",
   "main": "server.js",
   "scripts": {
@@ -19,9 +20,7 @@
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
-    "@semantic-release/changelog": "^6.0.3",
-    "@semantic-release/git": "^10.0.1",
-    "@semantic-release/gitlab": "^13.3.2",
+    "@semantic-release/github": "^12.0.8",
     "semantic-release": "^25.0.3"
   }
 }

@@ -19,9 +19,6 @@ is ready.
 - Solo retries against a session-only ghost of the best eligible run on the current text
 - Separate Solo actions to retry the exact text or choose a new one
 
-The active OpenSpec change is in
-`openspec/changes/add-solo-ghost-mode/`.
-
 ## Architecture
 
 The browser client is plain HTML, CSS, and JavaScript served by an Express
@@ -61,14 +58,49 @@ docker run --rm -p 3000:3000 typedash
 The production image installs runtime dependencies only, runs as the
 unprivileged `node` user, and includes a health check.
 
+## Continuous integration and releases
+
+Pull requests targeting `main` run the integration test suite and build the
+production Docker image. The image is only used for validation and is not
+published to a container registry.
+
+After a change reaches `main`, the same validation runs before
+[semantic-release](https://github.com/semantic-release/semantic-release)
+analyzes commits made since the latest reachable `v<major>.<minor>.<patch>`
+Git tag:
+
+- `fix:` and `perf:` create a patch release.
+- `feat:` creates a minor release.
+- A `!` after the commit type or a `BREAKING CHANGE:` footer creates a major
+  release.
+- Other commit types, including `docs:`, `test:`, and `chore:`, do not create a
+  release by default.
+
+Git tags and [GitHub Releases](https://github.com/valvin1/type-dash/releases)
+are the source of truth for project versions. The sentinel version in
+`package.json` is intentionally not updated or committed during releases, and
+the package is not published to npm.
+
+### Required GitHub repository settings
+
+Before merging the workflow configuration:
+
+1. In the repository's Actions settings, ensure organizational and repository
+   policy allows the release job to request `contents: write` for the built-in
+   `GITHUB_TOKEN`.
+2. In the `main` branch ruleset, require pull requests and the `Test and build`
+   status check from the `Pull request validation` workflow.
+3. If tag rules protect `v*` tags, allow the GitHub Actions repository app to
+   create the semantic-release tags.
+
 ## Publish a test deployment on Render
 
 The repository includes `render.yaml` for a free, single-instance web service
 in Frankfurt. Render supports the WebSocket connection used by Socket.IO.
 
-1. Push these changes to GitLab and merge them into the repository's default
-   branch.
-2. In Render, create a new Blueprint and connect the GitLab repository.
+1. Open a pull request on GitHub and merge it into the repository's `main`
+   branch after the required validation checks pass.
+2. In Render, create a new Blueprint and connect the GitHub repository.
 3. Select the repository's `render.yaml` and apply the Blueprint.
 4. Wait for the Docker build and `/health` check to pass, then open the assigned
    `onrender.com` URL.
