@@ -279,6 +279,57 @@ p {
     letter-spacing: 1px;
 }
 
+/* Duration Selection */
+#duration-selection {
+    margin: 1.5rem 0;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+}
+
+#duration-selection h3 {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    color: var(--text-muted);
+}
+
+.duration-buttons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 0.8rem;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.duration-btn {
+    background: var(--glass-border);
+    border: 1px solid transparent;
+    color: var(--text);
+    padding: 0.8rem;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.2s;
+}
+
+.duration-btn:hover {
+    background: var(--glass);
+    border-color: var(--primary);
+}
+
+.duration-btn.active {
+    background: var(--primary);
+    box-shadow: 0 0 15px var(--primary-glow);
+}
+
+#selected-duration-display {
+    margin: 1rem 0;
+    font-weight: 600;
+    color: var(--primary);
+    letter-spacing: 0.5px;
+}
+
 /* Waiting Screen */
 #waiting .glass-card {
     max-width: 900px;

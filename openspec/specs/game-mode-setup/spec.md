@@ -2,7 +2,6 @@
 
 ## Purpose
 Define the initial Solo or Multijoueur setup flow, including multiplayer capacity selection and explicit room creation and joining behavior.
-
 ## Requirements
 ### Requirement: Initial game mode selection
 The system MUST present an explicit Solo or Multijoueur choice before creating a new game, while players opening an existing multiplayer invitation link MUST attempt to join that room directly.
@@ -24,7 +23,7 @@ The system MUST create a one-player solo game and take the player directly to th
 
 #### Scenario: Solo retry preserves text and ghost
 - **WHEN** a solo game finishes and the player selects “Réessayer ce texte”
-- **THEN** the system SHALL retain Solo mode, the exact theme and text, and the best eligible ghost, reset the player run state, and start a new countdown
+- **THEN** the system SHALL retain Solo mode, the exact theme, text, and duration, and the best eligible ghost, reset the player run state, and start a new countdown
 
 #### Scenario: Solo player changes text
 - **WHEN** a solo game finishes and the player selects “Changer de texte”
@@ -51,3 +50,15 @@ The system MUST distinguish creating a configured game from joining an existing 
 #### Scenario: Solo room cannot be joined
 - **WHEN** another client attempts to join the identifier of a solo game
 - **THEN** the server SHALL reject the request and SHALL keep the solo game private
+
+### Requirement: Game duration selection
+The system MUST allow selecting a game duration among discrete presets (15s, 30s, 45s, 60s) in the pre-race waiting area, defaulting to 30 seconds for newly created Solo and Multiplayer rooms.
+
+#### Scenario: Default duration on room creation
+- **WHEN** a player creates a new Solo or Multiplayer room
+- **THEN** the server SHALL initialize the room duration to 30 seconds and the client SHALL render 30 seconds as the active preset
+
+#### Scenario: Solo player changes duration preset
+- **WHEN** a Solo player in the waiting screen selects a duration preset (15s, 45s, or 60s)
+- **THEN** the system SHALL update the active duration for the upcoming run and clear any existing ghost data
+

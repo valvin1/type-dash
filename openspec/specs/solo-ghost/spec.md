@@ -2,7 +2,6 @@
 
 ## Purpose
 Define how eligible Solo runs are retained, selected, replayed, scoped, and kept separate from connected players as ghost opponents.
-
 ## Requirements
 ### Requirement: Eligible Solo runs create a text-specific ghost
 The system MUST create a ghost only from a normally completed Solo run with at least three correctly typed words, and MUST associate that ghost with the exact text used by the run.
@@ -46,11 +45,15 @@ The system MUST record validated progress, WPM, and accuracy snapshots against e
 - **THEN** the ghost SHALL update at those recorded intervals rather than moving at a constant calculated speed
 
 ### Requirement: Session-scoped ghost lifetime
-The system MUST keep ghost data only in the current in-memory Solo room and MUST clear it when the text or theme changes, the Solo room ends, or the player disconnects or refreshes.
+The system MUST keep ghost data only in the current in-memory Solo room and MUST clear it when the text, theme, or game duration changes, the Solo room ends, or the player disconnects or refreshes.
 
 #### Scenario: Changing text clears the ghost
 - **WHEN** a Solo player chooses to change text after a run
 - **THEN** the system SHALL clear the retained ghost before returning to theme selection
+
+#### Scenario: Changing duration clears the ghost
+- **WHEN** a Solo player changes the game duration preset
+- **THEN** the system SHALL clear the retained ghost data from the room
 
 #### Scenario: Disconnect clears the Solo ghost
 - **WHEN** the Solo player disconnects or refreshes and its one-player room ends
@@ -66,3 +69,4 @@ The system MUST NOT add a ghost to the room's connected `players` collection.
 #### Scenario: Solo validation remains one-player
 - **WHEN** a Solo retry is started with a retained ghost
 - **THEN** the room SHALL still contain exactly one connected player while separately providing the synthetic ghost opponent
+

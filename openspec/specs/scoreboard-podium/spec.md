@@ -2,7 +2,6 @@
 
 ## Purpose
 Define live ranking behavior, overtake feedback, and the final podium and standings presentation.
-
 ## Requirements
 ### Requirement: Live leaderboard rankings
 The system MUST dynamically calculate and sort the standings of all active players in real-time based on their current typing scores (WPM * Accuracy / 100).
@@ -22,7 +21,7 @@ The system MUST play a distinct high-stakes beep sound whenever an opponent's sc
 At the end of the game timer, the system MUST render a 3D-styled glassmorphic podium displaying the names and stats of up to the top 3 players, accompanied by a detailed scoreboard table for participants ranked 4th through 6th when present.
 
 #### Scenario: Results for a six-player game
-- **WHEN** the 60-second timer expires in a game with 6 players
+- **WHEN** the configured game timer expires in a game with 6 players
 - **THEN** the client interface SHALL show the 1st, 2nd, and 3rd place players in Gold, Silver, and Bronze styled glass containers followed by detailed rows for the 4th, 5th, and 6th place players
 
 #### Scenario: Results for fewer than four players
@@ -57,3 +56,4 @@ The system MUST compare an eligible completed Solo run with the prior ghost afte
 #### Scenario: Ineligible result has no ghost feedback
 - **WHEN** a completed Solo run has fewer than three correctly typed words
 - **THEN** the results SHALL omit record comparison messaging and metric differences
+

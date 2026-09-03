@@ -14,6 +14,8 @@ const MAX_MULTIPLAYER_PLAYERS = 6;
 const MIN_GHOST_CORRECT_WORDS = 3;
 const GHOST_ID = '__solo_ghost__';
 const GAME_MODES = new Set(['solo', 'multiplayer']);
+const ALLOWED_DURATIONS = new Set([15, 30, 45, 60]);
+const DEFAULT_DURATION = 30;
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const DATA_DIR = path.join(__dirname, 'data');
 
@@ -135,7 +137,8 @@ function serializeRoom(room) {
         themes: getCategories(),
         currentTheme: room.theme,
         mode: room.mode,
-        maxPlayers: room.maxPlayers
+        maxPlayers: room.maxPlayers,
+        duration: room.duration || DEFAULT_DURATION
     };
 
     if (room.mode === 'solo') data.ghost = room.ghost;
@@ -247,6 +250,7 @@ io.on('connection', (socket) => {
         const room = rooms[roomId] = {
             mode,
             maxPlayers,
+            duration: DEFAULT_DURATION,
             players: [],
             text: null,
             theme: null,
@@ -303,6 +307,25 @@ io.on('connection', (socket) => {
         room.theme = theme;
         room.text = randomText;
         io.to(socket.data.roomId).emit('themeUpdated', { theme, text: room.text });
+    });
+
+    socket.on('chooseDuration', (duration) => {
+        const durationNum = Number(duration);
+        if (!ALLOWED_DURATIONS.has(durationNum)) return;
+
+        const room = getSocketRoom(socket);
+        if (!room || room.gameState !== 'waiting') return;
+
+        const player = room.players.find(candidate => candidate.id === socket.id);
+        if (!player || player.role !== 'P1') return;
+
+        room.duration = durationNum;
+        if (room.mode === 'solo') {
+            room.ghost = null;
+            room.currentRun = null;
+        }
+
+        io.to(socket.data.roomId).emit('durationUpdated', { duration: durationNum });
     });
 
     socket.on('setReady', () => {
@@ -474,7 +497,7 @@ function startGame(roomId) {
     }
     io.to(roomId).emit('gameStarted');
 
-    let timeLeft = 60;
+    let timeLeft = room.duration || DEFAULT_DURATION;
     io.to(roomId).emit('timerUpdate', timeLeft);
     room.gameTimer = setInterval(() => {
         timeLeft -= 1;

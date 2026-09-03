@@ -73,6 +73,20 @@
                         Thématique : <span id="active-theme-name">...</span>
                     </div>
 
+                    <div id="duration-selection" class="hidden">
+                        <h3>Durée de la partie :</h3>
+                        <div class="duration-buttons">
+                            <button class="duration-btn" data-duration="15" type="button">15s</button>
+                            <button class="duration-btn active" data-duration="30" type="button">30s</button>
+                            <button class="duration-btn" data-duration="45" type="button">45s</button>
+                            <button class="duration-btn" data-duration="60" type="button">60s</button>
+                        </div>
+                    </div>
+
+                    <div id="selected-duration-display" class="hidden">
+                        Durée : <span id="active-duration-value">30</span>s
+                    </div>
+
                     <div id="multiplayer-lobby">
                         <p id="lobby-readiness-message" class="lobby-readiness-message"></p>
                         <div id="player-slots" class="player-slots-grid">
@@ -91,7 +105,7 @@
             <section id="game" class="screen hidden">
                 <div class="game-header">
                     <div class="timer-container">
-                        <span id="timer">60</span>s
+                        <span id="timer">30</span>s
                     </div>
                     <div class="stats-bar">
                         <div id="leader-badge" class="badge">Égalité</div>
