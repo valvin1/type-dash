@@ -36,11 +36,16 @@ const roomInfo = document.getElementById('room-info');
 const multiplayerLobby = document.getElementById('multiplayer-lobby');
 const waitingStatus = document.getElementById('waiting-status');
 const readinessMessage = document.getElementById('lobby-readiness-message');
+const durationSelection = document.getElementById('duration-selection');
+const durationButtons = document.querySelectorAll('.duration-btn');
+const selectedDurationDisplay = document.getElementById('selected-duration-display');
+const activeDurationValue = document.getElementById('active-duration-value');
 
 // Game State
 let currentRoomId = null;
 let currentMode = null;
 let roomMaxPlayers = 1;
+let selectedDuration = 30;
 let targetText = "";
 let words = [];
 let currentWordIndex = 0;
@@ -118,6 +123,11 @@ socket.on('roomData', (data) => {
     updatePlayerList(data.players);
     roomInfo.classList.toggle('hidden', currentMode !== 'multiplayer');
     if (currentMode === 'multiplayer') roomIdDisplay.textContent = currentRoomId;
+
+    selectedDuration = data.duration || 30;
+    updateDurationButtons(selectedDuration);
+    if (activeDurationValue) activeDurationValue.textContent = selectedDuration;
+    if (timerDisplay) timerDisplay.textContent = selectedDuration;
 });
 
 socket.on('roomError', (message) => {
@@ -153,6 +163,13 @@ socket.on('themeUpdated', (data) => {
     updatePlayerList(activePlayers);
 });
 
+socket.on('durationUpdated', (data) => {
+    selectedDuration = data.duration;
+    updateDurationButtons(selectedDuration);
+    if (activeDurationValue) activeDurationValue.textContent = selectedDuration;
+    if (timerDisplay) timerDisplay.textContent = selectedDuration;
+});
+
 function renderThemeButtons(themes, currentTheme) {
     const container = document.querySelector('.theme-buttons');
     container.innerHTML = '';
@@ -165,6 +182,12 @@ function renderThemeButtons(themes, currentTheme) {
             socket.emit('chooseTheme', t);
         });
         container.appendChild(btn);
+    });
+}
+
+function updateDurationButtons(duration) {
+    durationButtons.forEach(btn => {
+        btn.classList.toggle('active', Number(btn.dataset.duration) === Number(duration));
     });
 }
 
@@ -325,6 +348,23 @@ changeSoloTextBtn.addEventListener('click', () => {
     socket.emit('changeSoloText');
 });
 
+durationButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        const d = Number(btn.dataset.duration);
+        if ([15, 30, 45, 60].includes(d)) {
+            selectedDuration = d;
+            if (currentMode === 'solo') {
+                ghostRecord = null;
+                ghostPlayer = null;
+            }
+            updateDurationButtons(d);
+            if (activeDurationValue) activeDurationValue.textContent = d;
+            if (timerDisplay) timerDisplay.textContent = d;
+            socket.emit('chooseDuration', d);
+        }
+    });
+});
+
 function resetGameState() {
     clearGhostReplayTimers();
     currentWordIndex = 0;
@@ -343,7 +383,7 @@ function resetGameState() {
     typingInput.disabled = true;
     wpmDisplay.textContent = '0';
     accDisplay.textContent = '0';
-    timerDisplay.textContent = '60';
+    timerDisplay.textContent = selectedDuration;
     
     // Reset scroller position
     if (textScroller) {
@@ -424,6 +464,9 @@ function clearRoomContext() {
     currentRoomId = null;
     currentMode = null;
     roomMaxPlayers = 1;
+    selectedDuration = 30;
+    updateDurationButtons(30);
+    if (activeDurationValue) activeDurationValue.textContent = '30';
     activePlayers = [];
     availableThemes = [];
     selectedTheme = null;
@@ -450,8 +493,14 @@ function updatePlayerList(players) {
     if (me?.role === 'P1') {
         themeSection.classList.remove('hidden');
         renderThemeButtons(availableThemes, selectedTheme);
+        if (durationSelection) durationSelection.classList.remove('hidden');
+        if (selectedDurationDisplay) selectedDurationDisplay.classList.add('hidden');
+        updateDurationButtons(selectedDuration);
     } else {
         themeSection.classList.add('hidden');
+        if (durationSelection) durationSelection.classList.add('hidden');
+        if (selectedDurationDisplay) selectedDurationDisplay.classList.remove('hidden');
+        if (activeDurationValue) activeDurationValue.textContent = selectedDuration;
     }
 
     if (currentMode === 'solo') {

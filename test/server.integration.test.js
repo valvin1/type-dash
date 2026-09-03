@@ -438,3 +438,99 @@ test('solo ghosts clear with text changes and stay isolated to their room', asyn
     await wait(20);
     assert.equal(rooms['solo-isolation-b'], undefined);
 });
+
+test('dynamic game duration: defaults to 30s, validates presets, allows host selection and syncs peers', async (t) => {
+    const fixture = await createFixture(t);
+    const host = await fixture.connect();
+    const guest = await fixture.connect();
+    const hostData = await createRoom(host, 'duration-test-room', 'multiplayer', 3);
+
+    // Initial default duration is 30s
+    assert.equal(hostData.duration, 30);
+    assert.equal(rooms['duration-test-room'].duration, 30);
+
+    const guestData = await joinRoom(guest, 'duration-test-room');
+    assert.equal(guestData.duration, 30);
+
+    // Invalid durations are rejected
+    host.emit('chooseDuration', 20);
+    host.emit('chooseDuration', 'invalid');
+    host.emit('chooseDuration', 100);
+    await wait(20);
+    assert.equal(rooms['duration-test-room'].duration, 30);
+
+    // Non-host attempts to choose duration
+    guest.emit('chooseDuration', 45);
+    await wait(20);
+    assert.equal(rooms['duration-test-room'].duration, 30);
+
+    // Host selects valid preset 45s
+    const hostUpdated = waitFor(host, 'durationUpdated');
+    const guestUpdated = waitFor(guest, 'durationUpdated');
+    host.emit('chooseDuration', 45);
+
+    const [hostRes, guestRes] = await Promise.all([hostUpdated, guestUpdated]);
+    assert.equal(hostRes.duration, 45);
+    assert.equal(guestRes.duration, 45);
+    assert.equal(rooms['duration-test-room'].duration, 45);
+
+    // Host changes to 15s
+    const hostUpdated15 = waitFor(host, 'durationUpdated');
+    const guestUpdated15 = waitFor(guest, 'durationUpdated');
+    host.emit('chooseDuration', 15);
+    const [h15, g15] = await Promise.all([hostUpdated15, guestUpdated15]);
+    assert.equal(h15.duration, 15);
+    assert.equal(g15.duration, 15);
+    assert.equal(rooms['duration-test-room'].duration, 15);
+});
+
+test('dynamic game duration: timer countdown starts from configured duration and solo ghost resets on duration change', async (t) => {
+    const fixture = await createFixture(t);
+    const soloPlayer = await fixture.connect();
+    const soloData = await createRoom(soloPlayer, 'solo-duration-room', 'solo', 1);
+
+    assert.equal(soloData.duration, 30);
+    await selectFirstTheme(soloPlayer, soloData.themes);
+
+    // Set duration to 45s before starting
+    const durationUpdated45 = waitFor(soloPlayer, 'durationUpdated');
+    soloPlayer.emit('chooseDuration', 45);
+    const d45 = await durationUpdated45;
+    assert.equal(d45.duration, 45);
+    assert.equal(rooms['solo-duration-room'].duration, 45);
+
+    // Complete run with 45s duration to establish a ghost
+    const initialRunPromise = completeSoloRun(soloPlayer, 'playSolo', [
+        soloUpdate({ progress: 50, wpm: 80, accuracy: 100, currentWordIndex: 5, correctWords: 5 })
+    ]);
+    const firstTimerUpdate = await waitFor(soloPlayer, 'timerUpdate');
+    assert.equal(firstTimerUpdate, 45); // Started at 45s
+    await initialRunPromise;
+
+    assert.ok(rooms['solo-duration-room'].ghost);
+    assert.equal(rooms['solo-duration-room'].ghost.wpm, 80);
+
+    // Retry preserves text, ghost, and duration
+    const retryRoomData = waitFor(soloPlayer, 'roomData');
+    soloPlayer.emit('retrySoloText');
+    const retryData = await retryRoomData;
+    assert.equal(retryData.duration, 45);
+    assert.ok(retryData.ghost);
+    assert.equal(rooms['solo-duration-room'].duration, 45);
+    assert.ok(rooms['solo-duration-room'].ghost);
+
+    // Wait for retry run to complete
+    await waitFor(soloPlayer, 'gameFinished');
+
+    // Return to waiting state
+    rooms['solo-duration-room'].gameState = 'waiting';
+
+    // Changing duration resets ghost
+    const changeDurationPromise = waitFor(soloPlayer, 'durationUpdated');
+    soloPlayer.emit('chooseDuration', 15);
+    const d15 = await changeDurationPromise;
+    assert.equal(d15.duration, 15);
+    assert.equal(rooms['solo-duration-room'].duration, 15);
+    assert.equal(rooms['solo-duration-room'].ghost, null);
+});
+
