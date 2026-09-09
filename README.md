@@ -30,6 +30,12 @@ intended to run as one application instance. A restart ends active games, and
 horizontal scaling would require a shared Socket.IO adapter and shared room
 state.
 
+## Suggestions de pseudo multijoueur
+
+Les suggestions de départ sont définies dans [`data/default-usernames.txt`](data/default-usernames.txt). Ajoutez une suggestion par ligne, avec 1 à 10 caractères Unicode. Les lignes vides et celles dont le premier caractère non blanc est `#` sont ignorées; un `#` au milieu d’un pseudo est conservé. Les doublons sont ignorés après la première occurrence et les lignes invalides déclenchent un avertissement au démarrage.
+
+Le fichier est lu au démarrage : redémarrez le serveur après une modification. Les joueurs déjà présents conservent leur pseudo.
+
 ## Run locally
 
 Requirements: Node.js 22–24 and npm.

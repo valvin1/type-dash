@@ -4,7 +4,7 @@ const { io: createClient } = require('socket.io-client');
 
 process.env.GAME_TICK_MS = '10';
 
-const { rooms, startServer, stopServer } = require('../server');
+const { DEFAULT_USERNAMES, rooms, startServer, stopServer } = require('../server');
 
 function waitFor(socket, event, predicate = () => true, timeoutMs = 2000) {
     return new Promise((resolve, reject) => {
@@ -176,6 +176,60 @@ test('health check and configured multiplayer lifecycle', async (t) => {
     const promotedHostTheme = waitFor(guest, 'themeUpdated');
     guest.emit('chooseTheme', hostData.themes[0]);
     assert.equal((await promotedHostTheme).theme, hostData.themes[0]);
+});
+
+test('multiplayer surname suggestions are synchronized, validated, and locked after countdown', async (t) => {
+    const fixture = await createFixture(t);
+    const host = await fixture.connect();
+    const guest = await fixture.connect();
+    const hostData = await createRoom(host, 'username-room', 'multiplayer', 2);
+
+    assert.ok(Object.isFrozen(DEFAULT_USERNAMES));
+    assert.ok(DEFAULT_USERNAMES.length > 0);
+    DEFAULT_USERNAMES.forEach(username => {
+        assert.ok(Array.from(username).length >= 1 && Array.from(username).length <= 10);
+    });
+    assert.ok(DEFAULT_USERNAMES.includes(hostData.players[0].username));
+    assert.ok(Array.from(hostData.players[0].username).length <= 10);
+
+    const hostSawGuest = waitFor(host, 'playerJoined', players => players.length === 2);
+    const guestData = await joinRoom(guest, 'username-room');
+    const joinedPlayers = await hostSawGuest;
+    assert.ok(DEFAULT_USERNAMES.includes(guestData.players[1].username));
+    assert.ok(Array.from(guestData.players[1].username).length <= 10);
+    assert.equal(joinedPlayers[1].username, guestData.players[1].username);
+
+    const hostRename = waitFor(host, 'usernameUpdated', players => players[1]?.username === 'Léa');
+    const guestRename = waitFor(guest, 'usernameUpdated', players => players[1]?.username === 'Léa');
+    guest.emit('changeUsername', '  Léa  ');
+    await Promise.all([hostRename, guestRename]);
+    assert.equal(rooms['username-room'].players[1].username, 'Léa');
+
+    const originalName = rooms['username-room'].players[1].username;
+    let usernameUpdates = 0;
+    host.on('usernameUpdated', () => { usernameUpdates += 1; });
+    for (const invalidName of ['', '   ', 123, 'abcdefghijk']) {
+        const error = waitFor(guest, 'usernameError');
+        guest.emit('changeUsername', invalidName);
+        assert.match(await error, /pseudo/i);
+        assert.equal(rooms['username-room'].players[1].username, originalName);
+    }
+    await wait(20);
+    assert.equal(usernameUpdates, 0);
+    host.off('usernameUpdated');
+
+    await selectFirstTheme(host, hostData.themes);
+    const everyoneReady = waitFor(host, 'playerReady', players => players.every(player => player.ready));
+    host.emit('setReady');
+    guest.emit('setReady');
+    await everyoneReady;
+    const countdown = waitFor(host, 'countdown', count => count === 3);
+    host.emit('startGame');
+    await countdown;
+
+    guest.emit('changeUsername', 'Changed');
+    await wait(20);
+    assert.equal(rooms['username-room'].players[1].username, originalName);
 });
 
 test('room creation validates configuration and join intent', async (t) => {
@@ -533,4 +587,3 @@ test('dynamic game duration: timer countdown starts from configured duration and
     assert.equal(rooms['solo-duration-room'].duration, 15);
     assert.equal(rooms['solo-duration-room'].ghost, null);
 });
-

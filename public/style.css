@@ -339,6 +339,51 @@ p {
     margin: 1.5rem 0 0;
 }
 
+.username-editor {
+    margin: 1.5rem auto 0;
+    max-width: 420px;
+    text-align: left;
+}
+
+.username-editor label {
+    display: block;
+    margin-bottom: 0.55rem;
+    font-weight: 700;
+}
+
+.username-editor label span {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+.username-editor-controls {
+    display: flex;
+    gap: 0.7rem;
+}
+
+.username-editor input {
+    min-width: 0;
+    flex: 1;
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    padding: 0.6rem 0.75rem;
+}
+
+.username-editor input:focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.username-error {
+    color: var(--error);
+    margin: 0.55rem 0 0;
+    font-size: 0.85rem;
+}
+
 .player-slots-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));

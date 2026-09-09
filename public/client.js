@@ -40,6 +40,9 @@ const durationSelection = document.getElementById('duration-selection');
 const durationButtons = document.querySelectorAll('.duration-btn');
 const selectedDurationDisplay = document.getElementById('selected-duration-display');
 const activeDurationValue = document.getElementById('active-duration-value');
+const usernameForm = document.getElementById('username-form');
+const usernameInput = document.getElementById('username-input');
+const usernameError = document.getElementById('username-error');
 
 // Game State
 let currentRoomId = null;
@@ -206,6 +209,16 @@ socket.on('playerLeft', (players) => {
     updatePlayerList(players);
 });
 
+socket.on('usernameUpdated', (players) => {
+    activePlayers = players;
+    updatePlayerList(players);
+});
+
+socket.on('usernameError', (message) => {
+    usernameError.textContent = message;
+    usernameError.classList.remove('hidden');
+});
+
 socket.on('countdown', (count) => {
     showScreen('game');
     countdownOverlay.classList.remove('hidden');
@@ -225,7 +238,7 @@ socket.on('countdown', (count) => {
             
             const label = document.createElement('div');
             label.className = 'lane-label';
-            label.textContent = getCompetitorName(p);
+            playerDisplay.setPlayerName(label, getCompetitorName(p));
             
             const track = document.createElement('div');
             track.className = 'lane-track';
@@ -346,6 +359,17 @@ retrySoloTextBtn.addEventListener('click', () => {
 
 changeSoloTextBtn.addEventListener('click', () => {
     socket.emit('changeSoloText');
+});
+
+usernameForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    usernameError.classList.add('hidden');
+    socket.emit('changeUsername', usernameInput.value);
+});
+
+usernameInput.addEventListener('input', () => {
+    const limitedUsername = playerDisplay.limitUsernameToCodePoints(usernameInput.value);
+    if (usernameInput.value !== limitedUsername) usernameInput.value = limitedUsername;
 });
 
 durationButtons.forEach(btn => {
@@ -513,6 +537,10 @@ function updatePlayerList(players) {
     }
 
     multiplayerLobby.classList.remove('hidden');
+    if (me?.username) {
+        usernameInput.value = me.username;
+        usernameError.classList.add('hidden');
+    }
     waitingStatus.textContent = `${players.length}/${roomMaxPlayers} joueurs dans le salon`;
 
     for (let i = 0; i < roomMaxPlayers; i++) {
@@ -530,7 +558,7 @@ function updatePlayerList(players) {
 
             const name = document.createElement('span');
             name.className = 'name';
-            name.textContent = p.id === socket.id ? 'Vous' : `Joueur ${p.role.replace('P', '')}`;
+            playerDisplay.setPlayerName(name, p.username);
             card.appendChild(name);
 
             const badge = document.createElement('span');
@@ -550,7 +578,7 @@ function updatePlayerList(players) {
                 removeBtn.className = 'remove-player-btn';
                 removeBtn.type = 'button';
                 removeBtn.textContent = 'Retirer';
-                removeBtn.setAttribute('aria-label', `Retirer Joueur ${p.role.replace('P', '')}`);
+                removeBtn.setAttribute('aria-label', `Retirer ${p.username}`);
                 removeBtn.addEventListener('click', () => socket.emit('removePlayer', p.id));
                 card.appendChild(removeBtn);
             }
@@ -746,6 +774,7 @@ function updateLeaderboard() {
 
 function getCompetitorName(player) {
     if (player.isGhost) return 'Votre record';
+    if (currentMode === 'multiplayer') return player.username;
     if (player.id === socket.id) return 'Vous';
     return player.role === 'P1' ? 'Hôte' : `Joueur ${player.role.replace('P', '')}`;
 }
@@ -793,7 +822,7 @@ function renderPodiumAndStandings(players) {
 
         const name = document.createElement('div');
         name.className = 'podium-name';
-        name.textContent = getResultCompetitorName(p);
+        playerDisplay.setPlayerName(name, getResultCompetitorName(p));
 
         const wpm = document.createElement('div');
         wpm.className = 'podium-wpm';
@@ -832,7 +861,7 @@ function renderPodiumAndStandings(players) {
             tdRank.textContent = `${rank}e`;
 
             const tdName = document.createElement('td');
-            tdName.textContent = getResultCompetitorName(p);
+            playerDisplay.setPlayerName(tdName, getResultCompetitorName(p));
 
             const tdScore = document.createElement('td');
             tdScore.textContent = `${p.score} pts`;
@@ -885,6 +914,7 @@ function formatDifference(value, suffix = '') {
 
 function getResultCompetitorName(player) {
     if (player.isGhost) return 'Votre record';
+    if (currentMode === 'multiplayer') return player.username;
     if (player.id === socket.id) return 'Vous';
     return `Joueur ${player.role.replace('P', '')}`;
 }
