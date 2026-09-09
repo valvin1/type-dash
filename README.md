@@ -58,6 +58,15 @@ docker run --rm -p 3000:3000 typedash
 The production image installs runtime dependencies only, runs as the
 unprivileged `node` user, and includes a health check.
 
+## Development workflow
+
+Follow [Creating a change](CONTRIBUTING.md) for each change:
+create a `feat/<change-name>` branch, explore, propose, and apply with OpenSpec,
+verify programmatically and manually, then create a Conventional Commit and
+push the branch. In Codex, start this sequence with
+`$new-change <description>`. This skill delegates to the planning,
+implementation, and verification agents using the OpenSpec skills.
+
 ## Continuous integration and releases
 
 Pull requests targeting `main` run the integration test suite and build the

@@ -1,5 +1,8 @@
 node_modules/
 .DS_Store
 npm-debug.log*
-.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/new-change/
 skills-lock.json
