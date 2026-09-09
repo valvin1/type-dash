@@ -18,6 +18,7 @@ const ALLOWED_DURATIONS = new Set([15, 30, 45, 60]);
 const DEFAULT_DURATION = 30;
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const DATA_DIR = path.join(__dirname, 'data');
+const USERNAME_SUFFIX_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
 // A null prototype prevents special keys such as "__proto__" from altering
 // room lookup behavior.
@@ -145,11 +146,19 @@ function serializeRoom(room) {
     return data;
 }
 
+function createProvisionalUsername() {
+    let suffix = '';
+    for (let index = 0; index < 3; index += 1) {
+        suffix += USERNAME_SUFFIX_CHARACTERS[Math.floor(Math.random() * USERNAME_SUFFIX_CHARACTERS.length)];
+    }
+    return `Pseudo-${suffix}`;
+}
+
 function addPlayerToRoom(socket, roomId, room) {
     socket.data.roomId = roomId;
     socket.join(roomId);
 
-    room.players.push({
+    const player = {
         id: socket.id,
         ready: false,
         wpm: 0,
@@ -158,7 +167,9 @@ function addPlayerToRoom(socket, roomId, room) {
         currentWordIndex: 0,
         correctWords: 0,
         role: `P${room.players.length + 1}`
-    });
+    };
+    if (room.mode === 'multiplayer') player.username = createProvisionalUsername();
+    room.players.push(player);
 
     socket.emit('roomData', serializeRoom(room));
     io.to(roomId).emit('playerJoined', room.players);
@@ -287,6 +298,26 @@ io.on('connection', (socket) => {
         }
 
         addPlayerToRoom(socket, roomId, room);
+    });
+
+    socket.on('changeUsername', (username) => {
+        const room = getSocketRoom(socket);
+        if (!room || room.mode !== 'multiplayer' || room.gameState !== 'waiting') return;
+
+        const player = room.players.find(candidate => candidate.id === socket.id);
+        if (!player) return;
+
+        if (typeof username !== 'string') {
+            return socket.emit('usernameError', 'Le pseudo doit être un texte de 1 à 10 caractères.');
+        }
+
+        const trimmedUsername = username.trim();
+        if (trimmedUsername.length === 0 || Array.from(trimmedUsername).length > 10) {
+            return socket.emit('usernameError', 'Le pseudo doit contenir de 1 à 10 caractères.');
+        }
+
+        player.username = trimmedUsername;
+        io.to(socket.data.roomId).emit('usernameUpdated', room.players);
     });
 
     socket.on('chooseTheme', (theme) => {

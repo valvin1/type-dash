@@ -88,6 +88,14 @@
                     </div>
 
                     <div id="multiplayer-lobby">
+                        <form id="username-form" class="username-editor">
+                            <label for="username-input">Votre pseudo <span aria-hidden="true">(10 caractères max.)</span></label>
+                            <div class="username-editor-controls">
+                                <input id="username-input" name="username" type="text" required aria-describedby="username-error">
+                                <button class="btn-secondary" type="submit">Modifier</button>
+                            </div>
+                            <p id="username-error" class="username-error hidden" role="alert" aria-live="polite"></p>
+                        </form>
                         <p id="lobby-readiness-message" class="lobby-readiness-message"></p>
                         <div id="player-slots" class="player-slots-grid">
                             <!-- Configured player slots injected here dynamically -->
@@ -189,6 +197,7 @@
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="player-display.js"></script>
     <script src="client.js"></script>
 </body>
 </html>
