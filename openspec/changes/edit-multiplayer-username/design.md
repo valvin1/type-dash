@@ -18,11 +18,13 @@ Multiplayer player objects currently contain a socket id, transient race statist
 
 ## Decisions
 
-### Server-authoritative provisional names and validation
+### Server-authoritative French-surname suggestions and validation
 
-The server will add a `username` to each multiplayer player when they join, using the clearly provisional `Pseudo-XXX` form, where `XXX` is a generated three-character suffix. The exact ten-character form satisfies the limit while inviting a replacement. The server will trim a submitted name and count Unicode code points before accepting only values from one through ten characters.
+The server will add a `username` to each multiplayer player when they join by randomly selecting from an immutable, offline curated list of common French surnames. The list is source-controlled application data, contains surname strings only, and every entry has from one through ten Unicode code points. It will contain at least ten distinct entries, such as `Martin`, `Bernard`, `Dubois`, `Moreau`, and `Lefebvre`. The selected value is an arbitrary display-name suggestion, not a claim about the player’s legal name, identity, nationality, gender, or account.
 
-This keeps malformed or bypassed browser input from entering shared room state. It also avoids relying on `maxlength`, which counts UTF-16 code units and is only a convenience affordance. A sequential slot-derived name was considered, but it can be reused after disconnections and feels like the static labels this change replaces.
+The server will trim a submitted replacement name and count Unicode code points before accepting only values from one through ten characters.
+
+Keeping the list local makes selection work offline, avoids live personal-data lookups, and makes the allowed default set testable without asserting a particular random outcome. This also keeps malformed or bypassed browser input from entering shared room state and avoids relying on `maxlength`, which counts UTF-16 code units and is only a convenience affordance. A sequential slot-derived name was considered, but it can be reused after disconnections and feels like the static labels this change replaces. Live name APIs and user-derived profile names were rejected because they would add availability, privacy, and identity implications outside this game’s scope.
 
 ### Owner-only rename protocol in the waiting room
 
@@ -38,7 +40,8 @@ Role badges and vehicle tokens remain role-based so host behavior and existing v
 
 ## Risks / Trade-offs
 
-- **[Risk] Generated suffixes can collide in a room.** → Names are display labels rather than identifiers; socket ids remain authoritative. Name uniqueness is intentionally outside this change.
+- **[Risk] Multiple players can receive the same surname.** → Names are display labels rather than identifiers; socket ids remain authoritative. Name uniqueness is intentionally outside this change.
+- **[Risk] A suggested surname could be mistaken for collected identity data.** → Keep the list offline and curated, present the value only as an editable pseudonym suggestion, and do not link it to accounts or personal data.
 - **[Risk] A client can submit values that bypasses the input limit.** → The server trims and validates every request before changing room state.
 - **[Risk] Arbitrary text could be interpreted as markup.** → Render names only with `textContent`, and cover markup-like input in automated tests.
 - **[Risk] A player may expect a name to survive reconnecting.** → The UI treats defaults as provisional and the scope explicitly remains session-only.

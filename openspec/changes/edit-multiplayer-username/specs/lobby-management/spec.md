@@ -1,15 +1,19 @@
 ## ADDED Requirements
 
 ### Requirement: Generated provisional multiplayer username
-The system MUST assign every player entering a multiplayer room a server-generated provisional username in the `Pseudo-XXX` form, where `XXX` is a generated three-character suffix, and MUST include that username in player data sent to room members. The assigned username MUST contain no more than 10 characters.
+The system MUST assign every player entering a multiplayer room a server-randomly-selected username from an offline, source-controlled curated list of common French surnames, and MUST include that username in player data sent to room members. The list MUST contain at least 10 distinct entries, each entry MUST contain from 1 through 10 Unicode characters, and the selected username MUST be an editable display-name suggestion only; it MUST NOT identify, authenticate, profile, or imply characteristics of the player.
 
-#### Scenario: Host receives a provisional username
+#### Scenario: Host receives an offline surname suggestion
 - **WHEN** a client creates a multiplayer room
-- **THEN** its `roomData` player record SHALL contain a username matching `Pseudo-[A-Z0-9]{3}` and that name SHALL contain 10 characters
+- **THEN** its `roomData` player record SHALL contain a username selected from the curated local surname list and that name SHALL contain no more than 10 Unicode characters
 
-#### Scenario: Guest receives a provisional username
+#### Scenario: Guest receives an offline surname suggestion
 - **WHEN** a client joins an existing multiplayer waiting room
-- **THEN** the joining client and existing room members SHALL receive player data containing the guest’s generated provisional username
+- **THEN** the joining client and existing room members SHALL receive player data containing the guest’s randomly selected username from the curated local surname list
+
+#### Scenario: Suggested names require no external lookup
+- **WHEN** a player creates or joins a multiplayer room while the application has no network access
+- **THEN** the server SHALL assign a username from the bundled curated list without making a network request
 
 ### Requirement: Owner-controlled multiplayer username change
 The system MUST allow a connected multiplayer player to change only their own username while the room is waiting. The server MUST trim the submitted string and accept it only when it contains from 1 through 10 Unicode characters. On an accepted change, the server MUST retain the trimmed username and broadcast `usernameUpdated` with the current player list to every room member.

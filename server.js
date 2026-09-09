@@ -18,7 +18,19 @@ const ALLOWED_DURATIONS = new Set([15, 30, 45, 60]);
 const DEFAULT_DURATION = 30;
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const DATA_DIR = path.join(__dirname, 'data');
-const USERNAME_SUFFIX_CHARACTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+const CURATED_FRENCH_SURNAMES = Object.freeze([
+    'Martin', 'Bernard', 'Thomas', 'Petit', 'Robert',
+    'Richard', 'Durand', 'Dubois', 'Moreau', 'Laurent',
+    'Simon', 'Michel', 'Lefebvre', 'Garcia', 'Bertrand'
+]);
+
+if (CURATED_FRENCH_SURNAMES.length < 10
+    || new Set(CURATED_FRENCH_SURNAMES).size !== CURATED_FRENCH_SURNAMES.length
+    || CURATED_FRENCH_SURNAMES.some(surname => typeof surname !== 'string'
+        || Array.from(surname).length < 1
+        || Array.from(surname).length > 10)) {
+    throw new Error('La liste des suggestions de pseudonymes est invalide');
+}
 
 // A null prototype prevents special keys such as "__proto__" from altering
 // room lookup behavior.
@@ -146,12 +158,8 @@ function serializeRoom(room) {
     return data;
 }
 
-function createProvisionalUsername() {
-    let suffix = '';
-    for (let index = 0; index < 3; index += 1) {
-        suffix += USERNAME_SUFFIX_CHARACTERS[Math.floor(Math.random() * USERNAME_SUFFIX_CHARACTERS.length)];
-    }
-    return `Pseudo-${suffix}`;
+function createSuggestedUsername() {
+    return CURATED_FRENCH_SURNAMES[Math.floor(Math.random() * CURATED_FRENCH_SURNAMES.length)];
 }
 
 function addPlayerToRoom(socket, roomId, room) {
@@ -168,7 +176,7 @@ function addPlayerToRoom(socket, roomId, room) {
         correctWords: 0,
         role: `P${room.players.length + 1}`
     };
-    if (room.mode === 'multiplayer') player.username = createProvisionalUsername();
+    if (room.mode === 'multiplayer') player.username = createSuggestedUsername();
     room.players.push(player);
 
     socket.emit('roomData', serializeRoom(room));
@@ -575,4 +583,12 @@ if (require.main === module) {
     });
 }
 
-module.exports = { app, io, rooms, server, startServer, stopServer };
+module.exports = {
+    app,
+    io,
+    rooms,
+    server,
+    startServer,
+    stopServer,
+    CURATED_FRENCH_SURNAMES
+};

@@ -1,10 +1,11 @@
 ## Why
 
-Multiplayer participants are currently shown with fixed slot labels such as “Joueur 2,” making a shared race harder to recognize and less personal. Giving each participant a short editable display name makes the lobby, race, and results understandable at a glance, while an intentionally provisional generated name encourages players to choose their own.
+Multiplayer participants are currently shown with fixed slot labels such as “Joueur 2,” making a shared race harder to recognize and less personal. Giving each participant a short editable display name makes the lobby, race, and results understandable at a glance; an offline French-surname suggestion provides a more natural starting point without representing a real identity.
 
 ## What Changes
 
-- Generate a server-authoritative provisional username for every player who enters a multiplayer room; the generated value is visibly a placeholder and fits the 10-character limit.
+- Randomly select a server-authoritative default username for every multiplayer entrant from an offline curated list of common French surnames. Every list entry fits the existing 10-character Unicode limit.
+- Treat the selected surname solely as an arbitrary display-name suggestion: it does not identify, authenticate, profile, or imply anything about the player.
 - Add a multiplayer-lobby control that lets a player replace only their own username before the race begins.
 - Validate submitted usernames on the server after trimming: they must be non-empty and no more than 10 user-perceived characters; invalid submissions keep the existing username unchanged and show feedback to the submitting player.
 - Broadcast accepted name changes to everyone in the room and use usernames consistently in multiplayer lobby cards, racetrack labels, podium, and standings.
@@ -26,4 +27,4 @@ Multiplayer participants are currently shown with fixed slot labels such as “J
 
 - Affects Socket.IO player state and events in `server.js`, including server-side input validation and room-wide player-list updates.
 - Affects the multiplayer waiting-room markup, styling, and rendering in `public/index.html`, `public/style.css`, and `public/client.js`.
-- Requires integration tests for accepted and rejected rename requests; does not add persistence, authentication, or dependencies.
+- Requires deterministic integration coverage that asserts defaults belong to the curated local list and still fit the character limit, as well as existing rename validation coverage. It does not add persistence, authentication, network lookups, personal-data collection, or dependencies.

@@ -4,7 +4,7 @@ const { io: createClient } = require('socket.io-client');
 
 process.env.GAME_TICK_MS = '10';
 
-const { rooms, startServer, stopServer } = require('../server');
+const { CURATED_FRENCH_SURNAMES, rooms, startServer, stopServer } = require('../server');
 
 function waitFor(socket, event, predicate = () => true, timeoutMs = 2000) {
     return new Promise((resolve, reject) => {
@@ -178,19 +178,26 @@ test('health check and configured multiplayer lifecycle', async (t) => {
     assert.equal((await promotedHostTheme).theme, hostData.themes[0]);
 });
 
-test('multiplayer usernames are generated, synchronized, validated, and locked after countdown', async (t) => {
+test('multiplayer surname suggestions are synchronized, validated, and locked after countdown', async (t) => {
     const fixture = await createFixture(t);
     const host = await fixture.connect();
     const guest = await fixture.connect();
     const hostData = await createRoom(host, 'username-room', 'multiplayer', 2);
 
-    assert.match(hostData.players[0].username, /^Pseudo-[A-Z0-9]{3}$/);
-    assert.equal(Array.from(hostData.players[0].username).length, 10);
+    assert.ok(Object.isFrozen(CURATED_FRENCH_SURNAMES));
+    assert.ok(CURATED_FRENCH_SURNAMES.length >= 10);
+    assert.equal(new Set(CURATED_FRENCH_SURNAMES).size, CURATED_FRENCH_SURNAMES.length);
+    CURATED_FRENCH_SURNAMES.forEach(surname => {
+        assert.ok(Array.from(surname).length >= 1 && Array.from(surname).length <= 10);
+    });
+    assert.ok(CURATED_FRENCH_SURNAMES.includes(hostData.players[0].username));
+    assert.ok(Array.from(hostData.players[0].username).length <= 10);
 
     const hostSawGuest = waitFor(host, 'playerJoined', players => players.length === 2);
     const guestData = await joinRoom(guest, 'username-room');
     const joinedPlayers = await hostSawGuest;
-    assert.match(guestData.players[1].username, /^Pseudo-[A-Z0-9]{3}$/);
+    assert.ok(CURATED_FRENCH_SURNAMES.includes(guestData.players[1].username));
+    assert.ok(Array.from(guestData.players[1].username).length <= 10);
     assert.equal(joinedPlayers[1].username, guestData.players[1].username);
 
     const hostRename = waitFor(host, 'usernameUpdated', players => players[1]?.username === 'Léa');
