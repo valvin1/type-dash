@@ -1,0 +1,17 @@
+# Suggestions de pseudo multijoueur
+# Une suggestion par ligne. Les lignes vides et les lignes commençant par # sont ignorées.
+# Modifiez ce fichier puis redémarrez le serveur : les joueurs déjà connectés ne changent pas.
+
+Dash
+Sprinter
+Comet
+Rocket
+Pixel
+Tempo
+Nimbus
+Orbit
+Vortex
+Zéphyr
+Kumo
+Flash
+Volt

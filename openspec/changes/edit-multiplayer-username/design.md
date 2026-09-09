@@ -18,13 +18,21 @@ Multiplayer player objects currently contain a socket id, transient race statist
 
 ## Decisions
 
-### Server-authoritative French-surname suggestions and validation
+### Server-authoritative file-backed suggestions and validation
 
-The server will add a `username` to each multiplayer player when they join by randomly selecting from an immutable, offline curated list of common French surnames. The list is source-controlled application data, contains surname strings only, and every entry has from one through ten Unicode code points. It will contain at least ten distinct entries, such as `Martin`, `Bernard`, `Dubois`, `Moreau`, and `Lefebvre`. The selected value is an arbitrary display-name suggestion, not a claim about the player’s legal name, identity, nationality, gender, or account.
+The server will add a `username` to each multiplayer player when they join by randomly selecting from the valid entries loaded from `data/default-usernames.txt`. The selected value is an arbitrary display-name suggestion, not a claim about the player’s legal name, identity, nationality, gender, account, or other personal characteristic.
 
 The server will trim a submitted replacement name and count Unicode code points before accepting only values from one through ten characters.
 
 Keeping the list local makes selection work offline, avoids live personal-data lookups, and makes the allowed default set testable without asserting a particular random outcome. This also keeps malformed or bypassed browser input from entering shared room state and avoids relying on `maxlength`, which counts UTF-16 code units and is only a convenience affordance. A sequential slot-derived name was considered, but it can be reused after disconnections and feels like the static labels this change replaces. Live name APIs and user-derived profile names were rejected because they would add availability, privacy, and identity implications outside this game’s scope.
+
+### Operator-editable text-file format and reload policy
+
+`data/default-usernames.txt` is a bundled UTF-8 text file. A UTF-8 byte-order mark is tolerated only at the start of the file. LF and CRLF line endings are accepted. Each non-comment line is trimmed and then validated as a potential default username. A line whose first non-whitespace character is `#` is a full-line comment and is ignored; inline `#` has no special meaning. Empty or whitespace-only lines are ignored. An entry that is empty after trimming or longer than 10 Unicode code points is invalid and ignored with a startup warning that includes its line number. Duplicate valid entries are ignored after their first occurrence, also with a line-number warning. Values remain case-sensitive after trimming.
+
+The server must successfully decode the file as UTF-8 and obtain at least one distinct valid entry. A missing, unreadable, malformed-UTF-8, or effectively empty file is a startup configuration error: the server must fail to start with a clear message naming `data/default-usernames.txt` and the reason. Failing fast prevents a running multiplayer service from silently issuing invalid defaults. The implementation and user-facing operator documentation will keep the format rules and restart requirement adjacent to the file and in the project documentation.
+
+The file is read once during server startup and the valid values are held in memory for that process. Editing it does not change suggestions for already connected players or for new entrants until the server is restarted; restart is the deliberate, minimal reload mechanism. File watching and hot reload were rejected because they introduce mid-process configuration races and make multiplayer behavior harder to reason about.
 
 ### Owner-only rename protocol in the waiting room
 
@@ -40,8 +48,9 @@ Role badges and vehicle tokens remain role-based so host behavior and existing v
 
 ## Risks / Trade-offs
 
-- **[Risk] Multiple players can receive the same surname.** → Names are display labels rather than identifiers; socket ids remain authoritative. Name uniqueness is intentionally outside this change.
-- **[Risk] A suggested surname could be mistaken for collected identity data.** → Keep the list offline and curated, present the value only as an editable pseudonym suggestion, and do not link it to accounts or personal data.
+- **[Risk] Multiple players can receive the same file-listed value.** → Names are display labels rather than identifiers; socket ids remain authoritative. Name uniqueness is intentionally outside this change.
+- **[Risk] An operator may save an unusable list.** → Ignore individual invalid/duplicate lines with clear warnings, but fail startup when no valid values remain; document the exact format beside the file.
+- **[Risk] A suggested value could be mistaken for collected identity data.** → Keep the list offline and operator-controlled, present values only as editable pseudonym suggestions, and do not link them to accounts or personal data.
 - **[Risk] A client can submit values that bypasses the input limit.** → The server trims and validates every request before changing room state.
 - **[Risk] Arbitrary text could be interpreted as markup.** → Render names only with `textContent`, and cover markup-like input in automated tests.
 - **[Risk] A player may expect a name to survive reconnecting.** → The UI treats defaults as provisional and the scope explicitly remains session-only.

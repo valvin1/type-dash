@@ -4,7 +4,7 @@ const { io: createClient } = require('socket.io-client');
 
 process.env.GAME_TICK_MS = '10';
 
-const { CURATED_FRENCH_SURNAMES, rooms, startServer, stopServer } = require('../server');
+const { DEFAULT_USERNAMES, rooms, startServer, stopServer } = require('../server');
 
 function waitFor(socket, event, predicate = () => true, timeoutMs = 2000) {
     return new Promise((resolve, reject) => {
@@ -184,19 +184,18 @@ test('multiplayer surname suggestions are synchronized, validated, and locked af
     const guest = await fixture.connect();
     const hostData = await createRoom(host, 'username-room', 'multiplayer', 2);
 
-    assert.ok(Object.isFrozen(CURATED_FRENCH_SURNAMES));
-    assert.ok(CURATED_FRENCH_SURNAMES.length >= 10);
-    assert.equal(new Set(CURATED_FRENCH_SURNAMES).size, CURATED_FRENCH_SURNAMES.length);
-    CURATED_FRENCH_SURNAMES.forEach(surname => {
-        assert.ok(Array.from(surname).length >= 1 && Array.from(surname).length <= 10);
+    assert.ok(Object.isFrozen(DEFAULT_USERNAMES));
+    assert.ok(DEFAULT_USERNAMES.length > 0);
+    DEFAULT_USERNAMES.forEach(username => {
+        assert.ok(Array.from(username).length >= 1 && Array.from(username).length <= 10);
     });
-    assert.ok(CURATED_FRENCH_SURNAMES.includes(hostData.players[0].username));
+    assert.ok(DEFAULT_USERNAMES.includes(hostData.players[0].username));
     assert.ok(Array.from(hostData.players[0].username).length <= 10);
 
     const hostSawGuest = waitFor(host, 'playerJoined', players => players.length === 2);
     const guestData = await joinRoom(guest, 'username-room');
     const joinedPlayers = await hostSawGuest;
-    assert.ok(CURATED_FRENCH_SURNAMES.includes(guestData.players[1].username));
+    assert.ok(DEFAULT_USERNAMES.includes(guestData.players[1].username));
     assert.ok(Array.from(guestData.players[1].username).length <= 10);
     assert.equal(joinedPlayers[1].username, guestData.players[1].username);
 

@@ -18,19 +18,59 @@ const ALLOWED_DURATIONS = new Set([15, 30, 45, 60]);
 const DEFAULT_DURATION = 30;
 const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const DATA_DIR = path.join(__dirname, 'data');
-const CURATED_FRENCH_SURNAMES = Object.freeze([
-    'Martin', 'Bernard', 'Thomas', 'Petit', 'Robert',
-    'Richard', 'Durand', 'Dubois', 'Moreau', 'Laurent',
-    'Simon', 'Michel', 'Lefebvre', 'Garcia', 'Bertrand'
-]);
+const DEFAULT_USERNAMES_PATH = path.join(DATA_DIR, 'default-usernames.txt');
 
-if (CURATED_FRENCH_SURNAMES.length < 10
-    || new Set(CURATED_FRENCH_SURNAMES).size !== CURATED_FRENCH_SURNAMES.length
-    || CURATED_FRENCH_SURNAMES.some(surname => typeof surname !== 'string'
-        || Array.from(surname).length < 1
-        || Array.from(surname).length > 10)) {
-    throw new Error('La liste des suggestions de pseudonymes est invalide');
+function defaultUsernameConfigurationError(reason) {
+    return new Error(`Configuration de data/default-usernames.txt invalide : ${reason}`);
 }
+
+function parseDefaultUsernames(contents, onWarning = console.warn) {
+    let text;
+    try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(contents);
+    } catch {
+        throw defaultUsernameConfigurationError('le fichier doit être encodé en UTF-8 valide');
+    }
+
+    if (text.startsWith('\uFEFF')) text = text.slice(1);
+
+    const usernames = [];
+    const seen = new Set();
+    text.split(/\r?\n/).forEach((line, index) => {
+        const lineNumber = index + 1;
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) return;
+
+        if (trimmed.includes('\uFEFF') || Array.from(trimmed).length > 10) {
+            onWarning(`data/default-usernames.txt ligne ${lineNumber} ignorée : pseudo invalide (1 à 10 caractères Unicode requis)`);
+            return;
+        }
+        if (seen.has(trimmed)) {
+            onWarning(`data/default-usernames.txt ligne ${lineNumber} ignorée : pseudo en double`);
+            return;
+        }
+
+        seen.add(trimmed);
+        usernames.push(trimmed);
+    });
+
+    if (usernames.length === 0) {
+        throw defaultUsernameConfigurationError('aucun pseudo valide n’a été trouvé');
+    }
+    return Object.freeze(usernames);
+}
+
+function loadDefaultUsernames(filePath = DEFAULT_USERNAMES_PATH) {
+    let contents;
+    try {
+        contents = fs.readFileSync(filePath);
+    } catch (error) {
+        throw defaultUsernameConfigurationError(`lecture impossible (${error.code || error.message})`);
+    }
+    return parseDefaultUsernames(contents);
+}
+
+const DEFAULT_USERNAMES = loadDefaultUsernames();
 
 // A null prototype prevents special keys such as "__proto__" from altering
 // room lookup behavior.
@@ -159,7 +199,7 @@ function serializeRoom(room) {
 }
 
 function createSuggestedUsername() {
-    return CURATED_FRENCH_SURNAMES[Math.floor(Math.random() * CURATED_FRENCH_SURNAMES.length)];
+    return DEFAULT_USERNAMES[Math.floor(Math.random() * DEFAULT_USERNAMES.length)];
 }
 
 function addPlayerToRoom(socket, roomId, room) {
@@ -590,5 +630,8 @@ module.exports = {
     server,
     startServer,
     stopServer,
-    CURATED_FRENCH_SURNAMES
+    DEFAULT_USERNAMES,
+    DEFAULT_USERNAMES_PATH,
+    loadDefaultUsernames,
+    parseDefaultUsernames
 };

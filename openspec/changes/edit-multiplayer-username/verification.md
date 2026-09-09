@@ -1,4 +1,38 @@
-## Supersession notice — 2026-09-09
+## Supersession notice — 2026-09-09 (file-backed defaults revision)
+
+The default-source evidence below applies to the prior hardcoded `CURATED_FRENCH_SURNAMES` implementation. It is retained as historical evidence for unchanged rename, Unicode-limit, safe-rendering, and regression checks, but it is **stale for every default-username source, parsing, startup-failure, and reload-semantics acceptance criterion** after the requirement changed to `data/default-usernames.txt`. Tasks 1.1, 1.2, 3.1, 3.2, 4.1, and 4.2 have been reopened. No verification in this document demonstrates the file-backed behavior until those tasks are rerun and new evidence is recorded.
+
+## Automated verification — file-backed defaults re-verification
+
+**Status: passed** — this is the current, superseding automated-verification result for the file-backed default-name working-tree revision based on `3a261ad feat(multiplayer): suggest French surnames`. The older default-source evidence below is historical only.
+
+### Tested state
+
+- Base commit: `3a261ad feat(multiplayer): suggest French surnames`
+- Working-tree revision: `data/default-usernames.txt`, the startup parser/loader in `server.js`, parser and server tests, operator documentation, and revised OpenSpec artifacts.
+
+### Commands and outcomes
+
+| Command | Outcome |
+| --- | --- |
+| `npm ci` | Passed; installed 402 packages. |
+| `npm audit --audit-level=high` | Passed with normal network access; 0 vulnerabilities. The sandboxed first attempt could not resolve the npm audit endpoint. |
+| `npm test` | Passed with loopback-server permission; 15/15 tests passed, including all three new parser/loader tests. |
+| `docker build --tag typedash:change-check .` | Passed with Docker-daemon permission and includes `data/` in the final image. |
+| `openspec validate edit-multiplayer-username --strict --no-interactive` | Passed; change is valid. The CLI's optional telemetry flush reported an unrelated DNS error after successful validation. |
+| `git diff --check` | Passed; no whitespace errors (including the two new files). |
+
+### Acceptance-criterion evidence
+
+- **Editable bundled file and file-backed selection:** `data/default-usernames.txt` is a tracked UTF-8 plain-text file and `DEFAULT_USERNAMES` loads it once at module/server startup. Multiplayer creation and joining select only from this frozen loaded list; the integration test proves host and guest defaults are members without assuming a random result. Docker copies `data/` into the runtime image.
+- **Parsing format:** `test/default-usernames.test.js` verifies leading BOM, CRLF input, comments, blank lines, trim, case-sensitive first-wins deduplication, an inline `#`, 10 astral Unicode code points, and overlong-value rejection with line-number warnings. The checked-in LF file is loaded by the full server test suite; the parser explicitly accepts both LF and CRLF.
+- **Failure behavior:** The parser test verifies malformed UTF-8 and an effectively empty list fail with a clear `data/default-usernames.txt` configuration error. Loader tests verify missing and unreadable targets do the same. Inspection confirms every startup read goes through this fail-fast loader before the server can listen.
+- **Restart semantics and operator documentation:** `DEFAULT_USERNAMES` is initialized once and never re-read or mutated during process lifetime, so edits neither change existing players nor new entrants before restart. The editable file carries format/restart guidance and `README.md` documents format, warnings, restart, and preservation of existing player names.
+- **Existing user behavior and regressions:** The passing integration test retains owner-only trim/validate/synchronize/error/countdown-lock coverage. The existing unit tests retain ten-astral-character editor and markup-safe lobby/racetrack/podium/standings coverage; the remainder of the suite covers room lifecycle, capacity, readiness, host authorization, duration, and Solo ghost behavior.
+
+Automated verification task 3.2 is complete for the file-backed-defaults revision.
+
+## Historical supersession notice — 2026-09-09 (curated-surname revision)
 
 The evidence below applies to commit `ed16545`, which generated `Pseudo-XXX` defaults. It is retained as historical evidence for the unchanged rename, Unicode-limit, safe-rendering, and regression checks, but it is **stale for the default-username acceptance criterion** after the requirement changed to offline curated French-surname suggestions. Tasks 1.1, 3.1, 3.2, 4.1, and 4.2 have been reopened. No verification in this document demonstrates the new default-selection behavior until those tasks are rerun and new evidence is recorded.
 
@@ -112,3 +146,36 @@ The host-only theme selection, guest/host readiness states, and the host-only `L
 | Solo regression | Solo retains its separate flow and does not show multiplayer name editing. | A fresh Solo session showed `Partie solo`; selecting Cinema exposed `Lancer la partie solo`, with no suggested-name editor. |
 
 Manual verification tasks 4.1 and 4.2 are complete for the curated-surname revision. No defects found.
+
+## Manual verification — file-backed defaults re-verification
+
+**Status: passed** — this supersedes all prior manual sections for the editable-file-backed default behavior. It was independently exercised against the freshly restarted local preview after the recorded file-backed automated verification.
+
+### Environment and source inspection
+
+- Fresh local preview at `http://localhost:3000`, with separate host and guest browser sessions plus a new Solo session.
+- `data/default-usernames.txt` was read without modification. Its documented UTF-8 plain-text entries include `Orbit`; it also documents that a server restart is required after edits and that existing players do not change. The current server source loads this file once at startup. No temporary file edit was performed, preserving the checked-in contents as directed.
+
+### Scenarios, expected results, and direct observations
+
+| Scenario | Expected | Observed |
+| --- | --- | --- |
+| Create a two-player room and join from an independent guest session | Defaults are suggestions selected from the currently loaded `data/default-usernames.txt`, not hardcoded surnames or `Pseudo-XXX`. | Host and guest each displayed `Orbit`, a current entry in `data/default-usernames.txt`. Each had the visible editable `Pseudo suggéré (modifiable, 10 caractères max.)` control. |
+| Replace guest name with `1234567890` | Valid 1–10-character input synchronizes. | Both guest and host immediately rendered `P2 1234567890`. |
+| Submit a whitespace-only name | The accepted name remains, the room remains open, and feedback appears inline. | The guest stayed in the same waiting room; the error `Le pseudo doit contenir de 1 à 10 caractères.` appeared by the control, and both lobbies retained `1234567890`. |
+| Change guest to `<Max>` and host to `HostAlice` | Markup-like names are safe literal text through lobby, race, and results. | Both lobby cards, both racetrack labels, and the completed podium showed literal `<Max>` and `HostAlice`; no markup was created. |
+| Complete normal multiplayer flow | Host configuration, readiness, host-only start, and results remain functional. | The host selected Cinema and 15 seconds. Guest readiness, host readiness, and host-only `Lancer la partie` worked; the two-player podium showed the selected names and correctly had no standings table. |
+| Solo regression | Solo remains independent of multiplayer name editing. | A new Solo session showed `Partie solo`; selecting Cinema revealed `Lancer la partie solo` and no suggested-name control. |
+
+Restart semantics and file parsing were confirmed by read-only inspection of the documented loaded file and startup-only loader; the recorded automated verification independently covers actual parser and restart behavior. No defects found. Manual verification tasks 4.1 and 4.2 are complete for the file-backed-defaults revision.
+
+### Addendum — actual file edit and restart check for task 4.2
+
+The preceding read-only restart statement is superseded by this direct isolated-server check.
+
+- Started an isolated server on port 3001 from the checked-in file; its host received `Rocket`.
+- While that server was still running, temporarily replaced only `data/default-usernames.txt` with the single valid entry `Reverify`. The existing host continued to display `Rocket`; a guest joining its existing room received `Nimbus`, not `Reverify`. This directly shows that the pre-restart loaded set and existing player record were unchanged by the on-disk edit.
+- Stopped and restarted the isolated server. A newly created room then displayed `Reverify`, proving the edited file became the source after restart.
+- Restored `data/default-usernames.txt` exactly to its original checked-in contents using the repository patch mechanism, then stopped and restarted the isolated server once more. The restored file loaded successfully. No application source or configuration other than the authorized temporary data-file edit was changed.
+
+**Task 4.2 status: passed.**
