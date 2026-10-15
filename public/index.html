@@ -172,6 +172,18 @@
                         </table>
                     </div>
 
+                    <section id="speed-chart-section" class="speed-chart-section hidden" aria-labelledby="speed-chart-title">
+                        <div class="chart-heading">
+                            <div><p class="chart-kicker">ANALYSE DE LA PARTIE</p><h3 id="speed-chart-title">Votre rythme, mot après mot</h3></div>
+                            <div class="chart-event-key">
+                                <span class="chart-error-key"><i aria-hidden="true"></i> Mot terminé avec erreur</span>
+                                <span class="chart-hesitation-key"><i aria-hidden="true"></i> Caractère supprimé</span>
+                            </div>
+                        </div>
+                        <div id="speed-chart" class="speed-chart"></div>
+                        <div id="speed-chart-legend" class="speed-chart-legend" aria-label="Joueurs"></div>
+                    </section>
+
                     <div id="ghost-result-feedback" class="ghost-result-feedback hidden" aria-live="polite">
                         <h3 id="ghost-result-heading"></h3>
                         <div class="ghost-differences">
@@ -198,6 +210,7 @@
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="player-display.js"></script>
+    <script src="typing-analysis.js"></script>
     <script src="client.js"></script>
 </body>
 </html>
