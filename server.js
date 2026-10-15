@@ -3,6 +3,7 @@ const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
+const { calculateWpm } = require('./public/typing-analysis');
 
 const app = express();
 const server = http.createServer(app);
@@ -10,6 +11,8 @@ const io = new Server(server);
 
 const PORT = Number(process.env.PORT) || 3000;
 const TICK_MS = Number(process.env.GAME_TICK_MS) || 1000;
+const CHART_SAMPLE_MS = 500;
+const MAX_HESITATIONS_PER_PLAYER = 200;
 const MAX_MULTIPLAYER_PLAYERS = 6;
 const MIN_GHOST_CORRECT_WORDS = 3;
 const GHOST_ID = '__solo_ghost__';
@@ -214,6 +217,9 @@ function addPlayerToRoom(socket, roomId, room) {
         progress: 0,
         currentWordIndex: 0,
         correctWords: 0,
+        timeline: [],
+        errors: [],
+        hesitations: [],
         role: `P${room.players.length + 1}`
     };
     if (room.mode === 'multiplayer') player.username = createSuggestedUsername();
@@ -246,8 +252,10 @@ function removePlayerFromRoom(roomId, playerId) {
 function clearRoomTimers(room) {
     if (room.countdownTimer) clearInterval(room.countdownTimer);
     if (room.gameTimer) clearInterval(room.gameTimer);
+    if (room.chartRun?.sampleTimer) clearInterval(room.chartRun.sampleTimer);
     room.countdownTimer = null;
     room.gameTimer = null;
+    room.chartRun = null;
 }
 
 function resetPlayers(room) {
@@ -258,6 +266,9 @@ function resetPlayers(room) {
         player.accuracy = 0;
         player.currentWordIndex = 0;
         player.correctWords = 0;
+        player.timeline = [];
+        player.errors = [];
+        player.hesitations = [];
     });
 }
 
@@ -511,11 +522,15 @@ io.on('connection', (socket) => {
         if (wpm < 0 || wpm > 300 || progress < 0 || progress > 100) return;
         if (accuracy < 0 || accuracy > 100 || currentWordIndex < 0 || currentWordIndex > wordCount) return;
 
-        let correctWords = player.correctWords;
-        if (room.mode === 'solo') {
-            correctWords = Number(data.correctWords);
-            if (!Number.isInteger(correctWords) || correctWords < 0 || correctWords > currentWordIndex || correctWords > wordCount) return;
-        }
+        const hasCorrectWordCount = Number.isInteger(data.correctWords);
+        const reportedCorrectWords = hasCorrectWordCount
+            ? Number(data.correctWords)
+            : Math.round(currentWordIndex * accuracy / 100);
+        if (!Number.isInteger(reportedCorrectWords)
+            || reportedCorrectWords < player.correctWords
+            || reportedCorrectWords > currentWordIndex
+            || reportedCorrectWords > wordCount) return;
+        const correctWords = reportedCorrectWords;
 
         player.progress = progress;
         player.wpm = wpm;
@@ -535,6 +550,34 @@ io.on('connection', (socket) => {
             }
         }
         socket.to(socket.data.roomId).emit('opponentUpdate', player);
+    });
+
+    socket.on('submittedWordError', (data) => {
+        const room = getSocketRoom(socket);
+        if (!room || room.gameState !== 'playing' || !data || typeof data !== 'object') return;
+        const player = room.players.find(candidate => candidate.id === socket.id);
+        const wordIndex = Number(data.wordIndex);
+        if (!player || !Number.isInteger(wordIndex) || wordIndex < 0 || wordIndex >= room.text.trim().split(/\s+/).length) return;
+        if (typeof data.typedWord !== 'string' || data.typedWord === room.text.trim().split(/\s+/)[wordIndex]) return;
+        if (player.errors.some(error => error.wordIndex === wordIndex)) return;
+        player.errors.push({ wordIndex, elapsedMs: Math.max(0, Date.now() - room.chartRun.startedAt) });
+    });
+
+    socket.on('characterDeleted', (data) => {
+        const room = getSocketRoom(socket);
+        if (!room || room.gameState !== 'playing' || !room.chartRun || !data || typeof data !== 'object') return;
+        const player = room.players.find(candidate => candidate.id === socket.id);
+        const wordIndex = Number(data.wordIndex);
+        const deletedCharacters = Number(data.deletedCharacters);
+        const wordCount = room.text.trim().split(/\s+/).length;
+        if (!player || !Number.isInteger(wordIndex) || wordIndex < 0 || wordIndex >= wordCount) return;
+        if (!Number.isInteger(deletedCharacters) || deletedCharacters < 1 || deletedCharacters > 1000) return;
+        if (player.hesitations.length >= MAX_HESITATIONS_PER_PLAYER) return;
+        player.hesitations.push({
+            wordIndex,
+            deletedCharacters,
+            elapsedMs: Math.max(0, Date.now() - room.chartRun.startedAt)
+        });
     });
 
     socket.on('disconnect', () => {
@@ -567,14 +610,32 @@ function startGame(roomId) {
     if (!room || room.gameState !== 'countdown') return;
 
     room.gameState = 'playing';
+    room.chartRun = { startedAt: Date.now(), sampleTimer: null };
+    room.players.forEach(player => {
+        player.timeline = [];
+        player.errors = [];
+        player.hesitations = [];
+    });
     if (room.mode === 'solo') {
         room.currentRun = {
-            startedAt: Date.now(),
+            startedAt: room.chartRun.startedAt,
             snapshots: [],
             racedGhost: room.ghost
         };
     }
     io.to(roomId).emit('gameStarted');
+
+    const capture = () => {
+        const elapsedMs = Math.max(0, Date.now() - room.chartRun.startedAt);
+        room.players.forEach(player => {
+            const point = { elapsedMs, wpm: calculateWpm(player.correctWords, elapsedMs) };
+            const series = player.timeline;
+            if (series.length && series[series.length - 1].elapsedMs === elapsedMs) series[series.length - 1] = point;
+            else series.push(point);
+        });
+    };
+    capture();
+    room.chartRun.sampleTimer = setInterval(() => capture(), CHART_SAMPLE_MS);
 
     let timeLeft = room.duration || DEFAULT_DURATION;
     io.to(roomId).emit('timerUpdate', timeLeft);
@@ -592,6 +653,17 @@ function startGame(roomId) {
 function endGame(roomId) {
     const room = rooms[roomId];
     if (!room) return;
+    if (room.chartRun) {
+        const elapsedMs = Math.max(0, Date.now() - room.chartRun.startedAt);
+        room.players.forEach(player => {
+            const series = player.timeline;
+            const point = { elapsedMs, wpm: calculateWpm(player.correctWords, elapsedMs) };
+            if (series.length && series[series.length - 1].elapsedMs === elapsedMs) series[series.length - 1] = point;
+            else series.push(point);
+        });
+        clearInterval(room.chartRun.sampleTimer);
+        room.chartRun = null;
+    }
     room.gameState = 'finished';
     const result = room.mode === 'solo' ? finishSoloRun(room) : room.players;
     io.to(roomId).emit('gameFinished', result);

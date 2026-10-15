@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { io: createClient } = require('socket.io-client');
+const { calculateWpm } = require('../public/typing-analysis');
 
 process.env.GAME_TICK_MS = '10';
 
@@ -176,6 +177,116 @@ test('health check and configured multiplayer lifecycle', async (t) => {
     const promotedHostTheme = waitFor(guest, 'themeUpdated');
     guest.emit('chooseTheme', hostData.themes[0]);
     assert.equal((await promotedHostTheme).theme, hostData.themes[0]);
+});
+
+test('completed Solo result includes bounded WPM samples and a terminal measurement', async (t) => {
+    const fixture = await createFixture(t);
+    const solo = await fixture.connect();
+    const roomData = await createRoom(solo, 'chart-solo-room', 'solo', 1);
+    await selectFirstTheme(solo, roomData.themes);
+    rooms['chart-solo-room'].duration = 120;
+
+    const started = waitFor(solo, 'gameStarted');
+    const finished = waitFor(solo, 'gameFinished');
+    solo.emit('playSolo');
+    await started;
+    await wait(550);
+    solo.emit('updateProgress', {
+        progress: 25,
+        wpm: 100,
+        accuracy: 100,
+        currentWordIndex: 2,
+        correctWords: 2
+    });
+
+    const result = await finished;
+    const timeline = result.players[0].timeline;
+    assert.ok(timeline.length >= 3);
+    assert.deepEqual(timeline.map(point => point.elapsedMs), [...timeline.map(point => point.elapsedMs)].sort((a, b) => a - b));
+    assert.ok(timeline.every(point => Number.isFinite(point.wpm) && point.wpm >= 0));
+    for (let index = 1; index < timeline.length; index++) {
+        assert.ok(timeline[index].elapsedMs - timeline[index - 1].elapsedMs <= 1000);
+    }
+    const finalPoint = timeline.at(-1);
+    assert.ok(finalPoint.elapsedMs >= 1100);
+    assert.equal(finalPoint.wpm, calculateWpm(result.players[0].correctWords, finalPoint.elapsedMs));
+    assert.deepEqual(result.players[0].errors, []);
+    assert.equal(result.ghost, null);
+    assert.equal(result.ghostResult, null);
+});
+
+test('multiplayer charts keep legacy progress, attribute submitted errors, and reset on replay', async (t) => {
+    const fixture = await createFixture(t);
+    const host = await fixture.connect();
+    const guest = await fixture.connect();
+    const hostData = await createRoom(host, 'chart-multiplayer-room', 'multiplayer', 2);
+    await selectFirstTheme(host, hostData.themes);
+    await joinRoom(guest, 'chart-multiplayer-room');
+    const room = rooms['chart-multiplayer-room'];
+    room.duration = 60; // Maximum supported duration; integration ticks are accelerated below one real second.
+
+    const bothReady = waitFor(host, 'playerReady', players => players.length === 2 && players.every(player => player.ready));
+    host.emit('setReady');
+    guest.emit('setReady');
+    await bothReady;
+    const started = waitFor(host, 'gameStarted');
+    const finished = waitFor(host, 'gameFinished');
+    host.emit('startGame');
+    await started;
+
+    // Older clients omit correctWords; accuracy and completed-word count keep their update usable.
+    host.emit('updateProgress', { progress: 50, wpm: 80, accuracy: 100, currentWordIndex: 2 });
+    guest.emit('updateProgress', { progress: 25, wpm: 40, accuracy: 50, currentWordIndex: 2, correctWords: 1 });
+    host.emit('submittedWordError', { wordIndex: 0, typedWord: 'incorrect' });
+    guest.emit('submittedWordError', { wordIndex: 1, typedWord: 'incorrect' });
+    host.emit('characterDeleted', { wordIndex: 0, deletedCharacters: 1 });
+    for (let index = 0; index < 250; index++) {
+        host.emit('characterDeleted', { wordIndex: 0, deletedCharacters: 1 });
+    }
+    guest.emit('characterDeleted', { wordIndex: 1, deletedCharacters: 2 });
+    host.emit('characterDeleted', { wordIndex: 0, deletedCharacters: 0 });
+    guest.emit('characterDeleted', { wordIndex: room.text.trim().split(/\s+/).length, deletedCharacters: 1 });
+    const correctWord = room.text.trim().split(/\s+/)[1];
+    host.emit('submittedWordError', { wordIndex: 1, typedWord: correctWord });
+
+    const result = await finished;
+    assert.equal(result[0].progress, 50);
+    assert.equal(result[0].wpm, 80);
+    assert.equal(result[0].accuracy, 100);
+    assert.equal(result[0].correctWords, 2);
+    assert.equal(result[1].accuracy, 50);
+    assert.equal(result[1].correctWords, 1);
+    assert.equal(result[0].errors.length, 1);
+    assert.equal(result[0].errors[0].wordIndex, 0);
+    assert.equal(result[1].errors.length, 1);
+    assert.equal(result[1].errors[0].wordIndex, 1);
+    assert.notEqual(result[0].errors[0].elapsedMs, undefined);
+    assert.equal(result[0].hesitations.length, 200);
+    assert.deepEqual(result[0].hesitations[0] && {
+        wordIndex: result[0].hesitations[0].wordIndex,
+        deletedCharacters: result[0].hesitations[0].deletedCharacters
+    }, { wordIndex: 0, deletedCharacters: 1 });
+    assert.deepEqual(result[1].hesitations.map(({ wordIndex, deletedCharacters }) => ({ wordIndex, deletedCharacters })), [
+        { wordIndex: 1, deletedCharacters: 2 }
+    ]);
+    assert.ok(result.every(player => Number.isFinite(player.hesitations[0].elapsedMs)));
+    for (const player of result) {
+        const timeline = player.timeline;
+        assert.ok(timeline.length >= 2);
+        assert.ok(timeline.length <= Math.ceil(60_000 / 500) + 2);
+        assert.ok(timeline.at(-1).elapsedMs >= 500);
+        assert.equal(timeline.at(-1).wpm, calculateWpm(player.correctWords, timeline.at(-1).elapsedMs));
+        for (let index = 1; index < timeline.length; index++) {
+            assert.ok(timeline[index].elapsedMs > timeline[index - 1].elapsedMs);
+            assert.ok(timeline[index].elapsedMs - timeline[index - 1].elapsedMs <= 1000);
+        }
+    }
+
+    const replay = waitFor(guest, 'roomData');
+    host.emit('playAgain');
+    const replayRoom = await replay;
+    assert.ok(replayRoom.players.every(player => player.timeline.length === 0 && player.errors.length === 0 && player.hesitations.length === 0));
+    assert.notEqual(rooms['chart-multiplayer-room'], undefined);
 });
 
 test('multiplayer surname suggestions are synchronized, validated, and locked after countdown', async (t) => {

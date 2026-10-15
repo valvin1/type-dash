@@ -52,6 +52,8 @@ let selectedDuration = 30;
 let targetText = "";
 let words = [];
 let currentWordIndex = 0;
+let previousInputValue = '';
+const deletionTracker = TypingAnalysis.createDeletionTracker();
 let startTime = null;
 let gameActive = false;
 let myLastRank = 1;
@@ -266,6 +268,8 @@ socket.on('gameStarted', () => {
     typingInput.disabled = false;
     typingInput.focus();
     startTime = Date.now();
+    previousInputValue = '';
+    deletionTracker.reset();
     gameActive = true;
     startGhostReplay();
 });
@@ -298,6 +302,7 @@ socket.on('gameFinished', (result) => {
     typingInput.disabled = true;
     showScreen('results');
     const players = Array.isArray(result) ? result : result.players;
+    renderSpeedChart(players);
     const resultPlayers = [...players];
     if (!Array.isArray(result) && result.ghost) resultPlayers.push(result.ghost);
     renderPodiumAndStandings(resultPlayers);
@@ -404,6 +409,8 @@ function resetGameState() {
     }
 
     typingInput.value = '';
+    previousInputValue = '';
+    deletionTracker.reset();
     typingInput.disabled = true;
     wpmDisplay.textContent = '0';
     accDisplay.textContent = '0';
@@ -415,11 +422,24 @@ function resetGameState() {
     }
 }
 
+typingInput.addEventListener('keydown', (event) => {
+    if (!gameActive || document.activeElement !== typingInput) {
+        deletionTracker.reset();
+        return;
+    }
+    deletionTracker.observeKey(event.key, typingInput.value);
+});
+
 typingInput.addEventListener('input', (e) => {
-    if (!gameActive) return;
+    if (!gameActive || document.activeElement !== typingInput) return;
 
     const input = typingInput.value;
     const currentWord = words[currentWordIndex];
+    const deletedCharacters = deletionTracker.observeInput(e.inputType, previousInputValue, input);
+    if (deletedCharacters > 0 && currentWordIndex < words.length) {
+        socket.emit('characterDeleted', { wordIndex: currentWordIndex, deletedCharacters });
+    }
+    previousInputValue = input;
     
     const wordEl = textScroller.children[currentWordIndex];
     if (wordEl) {
@@ -433,6 +453,9 @@ typingInput.addEventListener('input', (e) => {
     // Check for space to move to next word
     if (input.endsWith(' ')) {
         const typedWord = input.trim();
+        if (TypingAnalysis.shouldReportIncorrectSubmission(input, currentWord)) {
+            socket.emit('submittedWordError', { wordIndex: currentWordIndex, typedWord });
+        }
         
         if (wordEl) {
             wordEl.classList.remove('current');
@@ -454,6 +477,7 @@ typingInput.addEventListener('input', (e) => {
         }
         
         typingInput.value = '';
+        previousInputValue = '';
         updateStats();
     }
 });
@@ -462,6 +486,73 @@ typingInput.addEventListener('input', (e) => {
 function joinRoom(id) {
     currentRoomId = id;
     socket.emit('joinRoom', id);
+}
+
+function renderSpeedChart(players) {
+    const section = document.getElementById('speed-chart-section');
+    const container = document.getElementById('speed-chart');
+    const legend = document.getElementById('speed-chart-legend');
+    const series = (players || []).filter(player => !player.isGhost && Array.isArray(player.timeline) && player.timeline.length);
+    container.replaceChildren();
+    legend.replaceChildren();
+    section.classList.toggle('hidden', series.length === 0);
+    if (!series.length) return;
+
+    const width = 760, height = 300, left = 54, right = 18, top = 18, bottom = 42;
+    const plotWidth = width - left - right, plotHeight = height - top - bottom;
+    const maxTime = Math.max(1000, ...series.flatMap(player => player.timeline.map(point => point.elapsedMs)));
+    const maxWpm = Math.max(20, Math.ceil(Math.max(...series.flatMap(player => player.timeline.map(point => point.wpm))) / 20) * 20);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('role', 'img');
+    svg.setAttribute('aria-label', 'Évolution des mots par minute pendant la partie');
+    const add = (tag, attrs, parent = svg) => { const node = document.createElementNS(svg.namespaceURI, tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value)); parent.appendChild(node); return node; };
+    for (let tick = 0; tick <= 4; tick++) {
+        const y = top + plotHeight * tick / 4;
+        add('line', { x1: left, y1: y, x2: width - right, y2: y, class: 'chart-gridline' });
+        const label = add('text', { x: left - 10, y: y + 4, 'text-anchor': 'end', class: 'chart-axis-label' }); label.textContent = String(Math.round(maxWpm * (4 - tick) / 4));
+    }
+    for (let tick = 0; tick <= 4; tick++) {
+        const x = left + plotWidth * tick / 4;
+        add('line', { x1: x, y1: top, x2: x, y2: top + plotHeight, class: 'chart-gridline chart-gridline-vertical' });
+        const label = add('text', { x, y: height - 13, 'text-anchor': 'middle', class: 'chart-axis-label' }); label.textContent = `${Math.round(maxTime * tick / 4 / 1000)} s`;
+    }
+    const yTitle = add('text', { x: 14, y: top + plotHeight / 2, transform: `rotate(-90 14 ${top + plotHeight / 2})`, 'text-anchor': 'middle', class: 'chart-axis-title' }); yTitle.textContent = 'Mots par minute';
+    const colors = ['#8b7bff', '#35d6c2', '#ffb454', '#55a7ff', '#f472b6', '#a3e635'];
+    series.forEach((player, playerIndex) => {
+        const color = colors[playerIndex % colors.length];
+        const name = player.username || player.role || `Joueur ${playerIndex + 1}`;
+        const coords = player.timeline.map(point => [left + plotWidth * point.elapsedMs / maxTime, top + plotHeight * (1 - point.wpm / maxWpm)]);
+        if (coords.length > 1) add('path', { d: coords.map(([x,y], index) => `${index ? 'L' : 'M'} ${x} ${y}`).join(' '), stroke: color, class: 'chart-line' });
+        coords.forEach(([x,y], index) => { if (index === coords.length - 1 || index === 0) add('circle', { cx: x, cy: y, r: 3, fill: color, class: 'chart-point' }); });
+        (player.errors || []).forEach(error => {
+            const x = left + plotWidth * error.elapsedMs / maxTime;
+            const previous = player.timeline.filter(point => point.elapsedMs <= error.elapsedMs).at(-1) || player.timeline[0];
+            const next = player.timeline.find(point => point.elapsedMs >= error.elapsedMs) || previous;
+            const ratio = next.elapsedMs === previous.elapsedMs ? 0 : (error.elapsedMs - previous.elapsedMs) / (next.elapsedMs - previous.elapsedMs);
+            const wpm = previous.wpm + (next.wpm - previous.wpm) * ratio;
+            const y = top + plotHeight * (1 - wpm / maxWpm);
+            const marker = add('circle', { cx: x, cy: y, r: 5, class: 'chart-error-marker', tabindex: '0', 'aria-label': `${name}, erreur à ${Math.round(error.elapsedMs / 1000)} secondes` });
+            const title = document.createElementNS(svg.namespaceURI, 'title'); title.textContent = `${name} · erreur à ${Math.round(error.elapsedMs / 1000)} s`; marker.appendChild(title);
+        });
+        (player.hesitations || []).forEach(hesitation => {
+            const x = left + plotWidth * hesitation.elapsedMs / maxTime;
+            const previous = player.timeline.filter(point => point.elapsedMs <= hesitation.elapsedMs).at(-1) || player.timeline[0];
+            const next = player.timeline.find(point => point.elapsedMs >= hesitation.elapsedMs) || previous;
+            const ratio = next.elapsedMs === previous.elapsedMs ? 0 : (hesitation.elapsedMs - previous.elapsedMs) / (next.elapsedMs - previous.elapsedMs);
+            const wpm = previous.wpm + (next.wpm - previous.wpm) * ratio;
+            const y = top + plotHeight * (1 - wpm / maxWpm);
+            const marker = add('circle', { cx: x, cy: y, r: 5, class: 'chart-hesitation-marker', tabindex: '0', 'aria-label': `${name}, suppression de ${hesitation.deletedCharacters} caractère(s) à ${Math.round(hesitation.elapsedMs / 1000)} secondes` });
+            const title = document.createElementNS(svg.namespaceURI, 'title');
+            title.textContent = `${name} · ${hesitation.deletedCharacters} caractère(s) supprimé(s) à ${Math.round(hesitation.elapsedMs / 1000)} s`;
+            marker.appendChild(title);
+        });
+        const entry = document.createElement('span'); entry.className = 'chart-legend-item'; entry.style.setProperty('--series-color', color);
+        const swatch = document.createElement('i'); swatch.setAttribute('aria-hidden', 'true');
+        const label = document.createElement('span'); label.textContent = name;
+        entry.append(swatch, label); legend.appendChild(entry);
+    });
+    container.appendChild(svg);
 }
 
 function createRoom(mode, maxPlayers) {
@@ -656,8 +747,8 @@ function updateStats() {
     const correctWords = Array.from(textScroller.children).filter(el => el.classList.contains('correct')).length;
     const totalTyped = currentWordIndex;
     
-    const timeElapsed = (Date.now() - startTime) / 60000; 
-    const wpm = Math.round(correctWords / Math.max(timeElapsed, 0.01)) || 0;
+    const elapsedMs = Date.now() - startTime;
+    const wpm = TypingAnalysis.calculateWpm(correctWords, elapsedMs);
     const accuracy = totalTyped > 0 ? Math.round((correctWords / totalTyped) * 100) : 100;
     const progress = (currentWordIndex / words.length) * 100;
 
