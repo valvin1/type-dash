@@ -227,3 +227,7 @@ This verifies both curve separation and event ownership in the independently con
 4. The two-player result retained the podium and showed both players' ranked standings; the Solo results continued to show the player's podium placement and ghost comparison. The separate ranks 4–6 overflow table was not part of this scenario and was not tested.
 
 Responsive chart layout, replay reset, new-text reset, ranked player results, Solo podium, and Solo ghost comparison were observed to work. Task 3.3 is complete.
+
+### Final dependency gate scope
+
+The CI and release workflows now gate on `npm audit --omit=dev --audit-level=high`, labeled “Audit production dependencies”. That production dependency audit passed with zero vulnerabilities. The complete development-inclusive `npm audit --audit-level=high` remains reported above with 12 vulnerabilities and no compatible patch identified for the affected development dependency tree. The user explicitly accepted this scope because the production image dependencies are unaffected; the full audit result remains visible and is not presented as passing.
