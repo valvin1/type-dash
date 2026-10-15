@@ -12,6 +12,7 @@ const io = new Server(server);
 const PORT = Number(process.env.PORT) || 3000;
 const TICK_MS = Number(process.env.GAME_TICK_MS) || 1000;
 const CHART_SAMPLE_MS = 500;
+const MAX_HESITATIONS_PER_PLAYER = 200;
 const MAX_MULTIPLAYER_PLAYERS = 6;
 const MIN_GHOST_CORRECT_WORDS = 3;
 const GHOST_ID = '__solo_ghost__';
@@ -571,6 +572,7 @@ io.on('connection', (socket) => {
         const wordCount = room.text.trim().split(/\s+/).length;
         if (!player || !Number.isInteger(wordIndex) || wordIndex < 0 || wordIndex >= wordCount) return;
         if (!Number.isInteger(deletedCharacters) || deletedCharacters < 1 || deletedCharacters > 1000) return;
+        if (player.hesitations.length >= MAX_HESITATIONS_PER_PLAYER) return;
         player.hesitations.push({
             wordIndex,
             deletedCharacters,

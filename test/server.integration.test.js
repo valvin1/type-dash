@@ -240,6 +240,9 @@ test('multiplayer charts keep legacy progress, attribute submitted errors, and r
     host.emit('submittedWordError', { wordIndex: 0, typedWord: 'incorrect' });
     guest.emit('submittedWordError', { wordIndex: 1, typedWord: 'incorrect' });
     host.emit('characterDeleted', { wordIndex: 0, deletedCharacters: 1 });
+    for (let index = 0; index < 250; index++) {
+        host.emit('characterDeleted', { wordIndex: 0, deletedCharacters: 1 });
+    }
     guest.emit('characterDeleted', { wordIndex: 1, deletedCharacters: 2 });
     host.emit('characterDeleted', { wordIndex: 0, deletedCharacters: 0 });
     guest.emit('characterDeleted', { wordIndex: room.text.trim().split(/\s+/).length, deletedCharacters: 1 });
@@ -258,9 +261,11 @@ test('multiplayer charts keep legacy progress, attribute submitted errors, and r
     assert.equal(result[1].errors.length, 1);
     assert.equal(result[1].errors[0].wordIndex, 1);
     assert.notEqual(result[0].errors[0].elapsedMs, undefined);
-    assert.deepEqual(result[0].hesitations.map(({ wordIndex, deletedCharacters }) => ({ wordIndex, deletedCharacters })), [
-        { wordIndex: 0, deletedCharacters: 1 }
-    ]);
+    assert.equal(result[0].hesitations.length, 200);
+    assert.deepEqual(result[0].hesitations[0] && {
+        wordIndex: result[0].hesitations[0].wordIndex,
+        deletedCharacters: result[0].hesitations[0].deletedCharacters
+    }, { wordIndex: 0, deletedCharacters: 1 });
     assert.deepEqual(result[1].hesitations.map(({ wordIndex, deletedCharacters }) => ({ wordIndex, deletedCharacters })), [
         { wordIndex: 1, deletedCharacters: 2 }
     ]);
