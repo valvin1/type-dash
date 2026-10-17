@@ -1,6 +1,18 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { calculateWpm, createDeletionTracker, deletedCharacterCount, shouldReportIncorrectSubmission } = require('../public/typing-analysis');
+const { calculateWpm, calculateProgress, splitWords, isEmptyWordSubmission, createDeletionTracker, deletedCharacterCount, shouldReportIncorrectSubmission } = require('../public/typing-analysis');
+
+test('progress uses normalized target words and cannot advance beyond the text', () => {
+    const words = splitWords('  one\t two\nthree  ');
+    assert.deepEqual(words, ['one', 'two', 'three']);
+    assert.equal(calculateProgress(0, words.length), 0);
+    assert.ok(Math.abs(calculateProgress(1, words.length) - 100 / 3) < Number.EPSILON * 100);
+    assert.equal(calculateProgress(3, words.length), 100);
+    assert.equal(calculateProgress(4, words.length), 100);
+    assert.equal(calculateProgress(1, 0), 0);
+    assert.equal(isEmptyWordSubmission(' '), true);
+    assert.equal(isEmptyWordSubmission('word '), false);
+});
 
 test('WPM helper matches the live cumulative definition, including its minimum elapsed time', () => {
     assert.equal(calculateWpm(2, 1200), 100);
@@ -15,6 +27,7 @@ test('typing UI reports a mismatch only when the word is submitted', () => {
     assert.equal(shouldReportIncorrectSubmission('corrext ', target), true);
     // After backspace/correction, the actual submitted value is exact, so history of the typo is irrelevant.
     assert.equal(shouldReportIncorrectSubmission('correct ', target), false);
+    assert.equal(shouldReportIncorrectSubmission(' ', target), false);
 });
 
 test('typing UI counts only actual Backspace and Delete character removals', () => {

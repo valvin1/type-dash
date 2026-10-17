@@ -10,6 +10,17 @@
         'deleteWordForward'
     ]);
     const api = {
+        splitWords(text) {
+            const normalized = typeof text === 'string' ? text.trim() : '';
+            return normalized ? normalized.split(/\s+/) : [];
+        },
+        calculateProgress(completedWords, wordCount) {
+            if (!Number.isFinite(completedWords) || !Number.isFinite(wordCount) || wordCount <= 0) return 0;
+            return Math.min(100, Math.max(0, completedWords / wordCount * 100));
+        },
+        isEmptyWordSubmission(inputValue) {
+            return typeof inputValue === 'string' && inputValue.endsWith(' ') && inputValue.trim() === '';
+        },
         calculateWpm(correctWords, elapsedMs) {
             const elapsedMinutes = elapsedMs / 60000;
             return Math.round(correctWords / Math.max(elapsedMinutes, 0.01)) || 0;
@@ -17,6 +28,7 @@
         shouldReportIncorrectSubmission(inputValue, targetWord) {
             return typeof inputValue === 'string'
                 && inputValue.endsWith(' ')
+                && !api.isEmptyWordSubmission(inputValue)
                 && inputValue.trim() !== targetWord;
         },
         deletedCharacterCount(inputType, previousValue, nextValue, keyIntent = null) {

@@ -116,12 +116,16 @@ Run the same checks used by the repository's pull request validation:
 
 ```sh
 npm ci
-npm audit --audit-level=high
+npm audit --omit=dev --audit-level=high
 npm test
 docker build --tag typedash:change-check .
 openspec validate add-race-history --strict --no-interactive
 git diff --check
 ```
+
+The dependency audit intentionally checks production dependencies only, matching
+the CI and release workflows. Development dependencies are not included in the
+production image.
 
 Use Node.js 22–24 (CI uses Node.js 24) and a running Docker daemon. Record
 commands, outcomes, and the acceptance criteria they cover in

@@ -64,6 +64,8 @@ let lastEmitTime = 0;
 let ghostRecord = null;
 let ghostPlayer = null;
 let ghostReplayTimers = [];
+let soloBestAtRunStart = null;
+let soloProgressResult = null;
 const throttleMs = 150;
 
 // Audio Context for notification
@@ -271,6 +273,8 @@ socket.on('gameStarted', () => {
     previousInputValue = '';
     deletionTracker.reset();
     gameActive = true;
+    soloBestAtRunStart = currentMode === 'solo' ? SoloProgress.beginRun(targetText, getLocalStorage()) : null;
+    soloProgressResult = null;
     startGhostReplay();
 });
 
@@ -302,11 +306,23 @@ socket.on('gameFinished', (result) => {
     typingInput.disabled = true;
     showScreen('results');
     const players = Array.isArray(result) ? result : result.players;
-    renderSpeedChart(players);
+    if (currentMode === 'solo') {
+        const me = players.find(player => player.id === socket.id);
+        if (me) soloProgressResult = SoloProgress.finishRun(targetText, me, soloBestAtRunStart, getLocalStorage());
+    }
+    const chartSeries = currentMode === 'solo'
+        ? SoloProgress.buildChartSeries(players, {
+            playerId: socket.id,
+            current: soloProgressResult?.current,
+            comparison: soloProgressResult?.comparison
+        })
+        : SoloProgress.buildChartSeries(players);
+    renderSpeedChart(chartSeries);
     const resultPlayers = [...players];
     if (!Array.isArray(result) && result.ghost) resultPlayers.push(result.ghost);
     renderPodiumAndStandings(resultPlayers);
-    renderGhostResult(Array.isArray(result) ? null : result.ghostResult);
+    const serverGhostResult = Array.isArray(result) ? null : result.ghostResult;
+    renderGhostResult(SoloProgress.selectGhostFeedback(currentMode, soloProgressResult, serverGhostResult));
     const isSoloResult = currentMode === 'solo';
     soloResultActions.classList.toggle('hidden', !isSoloResult);
     playAgainBtn.classList.toggle('hidden', isSoloResult);
@@ -440,6 +456,14 @@ typingInput.addEventListener('input', (e) => {
         socket.emit('characterDeleted', { wordIndex: currentWordIndex, deletedCharacters });
     }
     previousInputValue = input;
+
+    // A second space after submitting a word is not another word attempt.
+    if (TypingAnalysis.isEmptyWordSubmission(input)) {
+        typingInput.value = '';
+        previousInputValue = '';
+        deletionTracker.reset();
+        return;
+    }
     
     const wordEl = textScroller.children[currentWordIndex];
     if (wordEl) {
@@ -492,7 +516,7 @@ function renderSpeedChart(players) {
     const section = document.getElementById('speed-chart-section');
     const container = document.getElementById('speed-chart');
     const legend = document.getElementById('speed-chart-legend');
-    const series = (players || []).filter(player => !player.isGhost && Array.isArray(player.timeline) && player.timeline.length);
+    const series = (players || []).filter(player => (!player.isGhost || player.isHistorical) && Array.isArray(player.timeline) && player.timeline.length);
     container.replaceChildren();
     legend.replaceChildren();
     section.classList.toggle('hidden', series.length === 0);
@@ -588,6 +612,8 @@ function clearRoomContext() {
     targetText = '';
     ghostRecord = null;
     ghostPlayer = null;
+    soloBestAtRunStart = null;
+    soloProgressResult = null;
     roomInfo.classList.add('hidden');
     multiplayerSetup.classList.add('hidden');
     modeSelection.classList.remove('hidden');
@@ -730,7 +756,7 @@ function updatePlayerList(players) {
 }
 
 function setupTextDisplay(text) {
-    words = text.split(' ');
+    words = TypingAnalysis.splitWords(text);
     textScroller.innerHTML = words.map(w => `<span class="word">${w}</span>`).join('');
     if (textScroller.children[0]) textScroller.children[0].classList.add('current');
     scrollCurrentLineToTop();
@@ -750,7 +776,7 @@ function updateStats() {
     const elapsedMs = Date.now() - startTime;
     const wpm = TypingAnalysis.calculateWpm(correctWords, elapsedMs);
     const accuracy = totalTyped > 0 ? Math.round((correctWords / totalTyped) * 100) : 100;
-    const progress = (currentWordIndex / words.length) * 100;
+    const progress = TypingAnalysis.calculateProgress(currentWordIndex, words.length);
 
     wpmDisplay.textContent = wpm;
     accDisplay.textContent = accuracy;
@@ -864,10 +890,15 @@ function updateLeaderboard() {
 }
 
 function getCompetitorName(player) {
+    if (player.isHistorical) return 'Meilleur run précédent';
     if (player.isGhost) return 'Votre record';
     if (currentMode === 'multiplayer') return player.username;
     if (player.id === socket.id) return 'Vous';
     return player.role === 'P1' ? 'Hôte' : `Joueur ${player.role.replace('P', '')}`;
+}
+
+function getLocalStorage() {
+    try { return window.localStorage; } catch { return null; }
 }
 
 function calculateScore(player) {
